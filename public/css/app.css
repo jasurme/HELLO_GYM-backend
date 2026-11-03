@@ -1,0 +1,182 @@
+/* BinaryFit Gym: theme on top of Bootstrap 5.3 */
+:root {
+  --brand: #4338ca;
+  --brand-rgb: 67, 56, 202;
+  --brand-dark: #312e81;
+  --brand-soft: #eef2ff;
+  --accent: #10b981;
+  --page-bg: #f6f7fb;
+  --bs-primary: var(--brand);
+  --bs-primary-rgb: var(--brand-rgb);
+  --bs-link-color: var(--brand);
+  --bs-link-color-rgb: var(--brand-rgb);
+  --bs-link-hover-color: var(--brand-dark);
+  --bs-border-radius: 0.6rem;
+  --bs-border-radius-lg: 0.9rem;
+}
+
+body {
+  background: var(--page-bg);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+main { flex: 1; }
+
+.btn-primary {
+  --bs-btn-bg: var(--brand);
+  --bs-btn-border-color: var(--brand);
+  --bs-btn-hover-bg: var(--brand-dark);
+  --bs-btn-hover-border-color: var(--brand-dark);
+  --bs-btn-active-bg: var(--brand-dark);
+  --bs-btn-active-border-color: var(--brand-dark);
+  --bs-btn-disabled-bg: var(--brand);
+  --bs-btn-disabled-border-color: var(--brand);
+}
+.btn-outline-primary {
+  --bs-btn-color: var(--brand);
+  --bs-btn-border-color: var(--brand);
+  --bs-btn-hover-bg: var(--brand);
+  --bs-btn-hover-border-color: var(--brand);
+  --bs-btn-active-bg: var(--brand-dark);
+  --bs-btn-active-border-color: var(--brand-dark);
+}
+.text-brand { color: var(--brand) !important; }
+.bg-brand-soft { background: var(--brand-soft) !important; }
+.form-control:focus, .form-select:focus {
+  border-color: rgba(var(--brand-rgb), 0.5);
+  box-shadow: 0 0 0 0.2rem rgba(var(--brand-rgb), 0.15);
+}
+
+/* ---- Navigation ---------------------------------------------------- */
+.app-nav {
+  background: linear-gradient(90deg, var(--brand-dark), var(--brand));
+}
+.app-nav .navbar-brand { font-weight: 700; letter-spacing: 0.2px; }
+.app-nav .nav-link { color: rgba(255, 255, 255, 0.78); border-radius: 0.5rem; padding-inline: 0.75rem !important; }
+.app-nav .nav-link:hover { color: #fff; }
+.app-nav .nav-link.active { color: #fff; background: rgba(255, 255, 255, 0.14); }
+.brand-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.55rem;
+  background: rgba(255, 255, 255, 0.16);
+  margin-right: 0.5rem;
+}
+.role-pill {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+}
+
+/* ---- Cards & tiles ----------------------------------------------------- */
+.card { border: 0; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08); }
+.card-header { background: transparent; border-bottom: 1px solid rgba(0, 0, 0, 0.06); font-weight: 600; }
+.page-title { font-weight: 700; letter-spacing: -0.01em; }
+.page-subtitle { color: var(--bs-secondary-color); }
+
+.kpi { padding: 1.1rem 1.2rem; }
+.kpi .kpi-icon {
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 0.75rem;
+  display: grid;
+  place-items: center;
+  font-size: 1.25rem;
+}
+.kpi .kpi-value { font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
+.kpi .kpi-label { color: var(--bs-secondary-color); font-size: 0.85rem; }
+
+.membership-card {
+  background: linear-gradient(135deg, var(--brand-dark), var(--brand) 60%, #6366f1);
+  color: #fff;
+}
+.membership-card .text-muted-light { color: rgba(255, 255, 255, 0.72); }
+.membership-card .progress { background: rgba(255, 255, 255, 0.2); height: 0.55rem; }
+.membership-card .progress-bar { background: #a7f3d0; }
+
+/* ---- Lists & tables ---------------------------------------------------- */
+.table > :not(caption) > * > * { padding: 0.65rem 0.75rem; }
+.table thead th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bs-secondary-color);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.table-hover tbody tr.clickable { cursor: pointer; }
+.session-item { border-left: 4px solid var(--brand); }
+.session-item.status-completed { border-left-color: var(--bs-success); }
+.session-item.status-no_show { border-left-color: var(--bs-warning); }
+.session-item.status-cancelled { border-left-color: var(--bs-secondary); opacity: 0.75; }
+.date-chip {
+  min-width: 3.4rem;
+  text-align: center;
+  border-radius: 0.6rem;
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  padding: 0.35rem 0.4rem;
+  line-height: 1.1;
+}
+.date-chip .day { font-size: 1.25rem; font-weight: 700; }
+.date-chip .mon { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ---- Booking ------------------------------------------------------------ */
+.trainer-option { cursor: pointer; transition: transform 0.1s ease, box-shadow 0.1s ease; }
+.trainer-option:hover { transform: translateY(-2px); }
+.trainer-option.selected { outline: 2px solid var(--brand); }
+.avatar {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+.slot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.2rem, 1fr)); gap: 0.5rem; }
+.slot-grid .btn { font-variant-numeric: tabular-nums; }
+.slot-grid .btn.unavailable { text-decoration: line-through; }
+
+/* ---- Availability editor ---------------------------------------------- */
+.week-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.75rem; }
+@media (max-width: 991.98px) { .week-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 575.98px) { .week-grid { grid-template-columns: 1fr; } }
+.window-chip {
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Landing ------------------------------------------------------------ */
+.hero {
+  background:
+    radial-gradient(1200px 400px at 85% -10%, rgba(16, 185, 129, 0.25), transparent),
+    linear-gradient(135deg, var(--brand-dark), var(--brand));
+  color: #fff;
+}
+.hero .lead { color: rgba(255, 255, 255, 0.82); }
+.plan-card .price { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.02em; }
+.plan-card.featured { outline: 2px solid var(--brand); }
+.auth-card { max-width: 460px; }
+
+.empty-state { color: var(--bs-secondary-color); text-align: center; padding: 2rem 1rem; }
+.empty-state i { font-size: 2rem; display: block; margin-bottom: 0.5rem; opacity: 0.6; }
+
+.chart-box { position: relative; height: 280px; }
+footer.app-footer { color: var(--bs-secondary-color); font-size: 0.85rem; }
+.font-tabular { font-variant-numeric: tabular-nums; }

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Join · BinaryFit</title>
+  <link rel="icon" href="/img/favicon.svg">
+  <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/vendor/bootstrap-icons/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="hero">
+  <main class="container py-5 d-flex flex-column align-items-center">
+    <a class="navbar-brand d-flex align-items-center text-white fs-4 fw-bold mb-4 text-decoration-none" href="/">
+      <span class="brand-mark"><i class="bi bi-lightning-charge-fill"></i></span>BinaryFit
+    </a>
+    <div class="card auth-card w-100 text-body">
+      <div class="card-body p-4">
+        <h1 class="h4 fw-bold mb-1">Create your member account</h1>
+        <p class="text-secondary mb-4">Next you will choose a membership plan.</p>
+        <form id="registerForm" novalidate>
+          <div class="row g-3">
+            <div class="col-sm-6">
+              <label class="form-label" for="firstName">First name</label>
+              <input class="form-control" id="firstName" name="firstName" autocomplete="given-name" required>
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label" for="lastName">Last name</label>
+              <input class="form-control" id="lastName" name="lastName" autocomplete="family-name" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label" for="email">Email</label>
+              <input class="form-control" id="email" name="email" type="email" autocomplete="email" required>
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label" for="phone">Phone <span class="text-secondary small">(optional)</span></label>
+              <input class="form-control" id="phone" name="phone" type="tel" placeholder="010-1234-5678" autocomplete="tel">
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label" for="dateOfBirth">Date of birth <span class="text-secondary small">(optional)</span></label>
+              <input class="form-control" id="dateOfBirth" name="dateOfBirth" type="date">
+            </div>
+            <div class="col-12">
+              <label class="form-label" for="password">Password</label>
+              <input class="form-control" id="password" name="password" type="password" autocomplete="new-password" required>
+              <div class="form-text">At least 8 characters, with a letter and a digit.</div>
+            </div>
+          </div>
+          <button class="btn btn-primary w-100 mt-4" type="submit">Create account</button>
+        </form>
+        <p class="text-center small mt-3 mb-0">Already a member? <a href="/login.html">Log in</a></p>
+      </div>
+    </div>
+  </main>
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script type="module" src="/js/pages/register.js"></script>
+</body>
+</html>

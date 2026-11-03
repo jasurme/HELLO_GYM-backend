@@ -45,7 +45,12 @@ function createApp() {
   const app = express();
   app.disable('x-powered-by');
 
-  app.use(helmet());
+  // Default CSP (scripts only from this site, no inline scripts), minus the
+  // HTTPS upgrade: the app is served over plain http://localhost.
+  app.use(helmet({
+    contentSecurityPolicy: { directives: { upgradeInsecureRequests: null } },
+    strictTransportSecurity: false,
+  }));
   app.use(express.json({ limit: '100kb' }));
   app.use(session({
     name: 'gym.sid',

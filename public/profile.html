@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My profile · BinaryFit</title>
+  <link rel="icon" href="/img/favicon.svg">
+  <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/vendor/bootstrap-icons/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <main class="container py-4">
+    <h1 class="page-title h3 mb-1">My profile</h1>
+    <p class="page-subtitle mb-4">Keep your contact details up to date.</p>
+    <div class="row g-4">
+      <div class="col-lg-7">
+        <div class="card">
+          <div class="card-header">Details</div>
+          <div class="card-body">
+            <form id="profileForm" novalidate>
+              <div class="row g-3">
+                <div class="col-sm-6"><label class="form-label">First name</label><input class="form-control" name="firstName" required></div>
+                <div class="col-sm-6"><label class="form-label">Last name</label><input class="form-control" name="lastName" required></div>
+                <div class="col-sm-6"><label class="form-label">Email</label><input class="form-control" name="email" disabled></div>
+                <div class="col-sm-6"><label class="form-label">Phone</label><input class="form-control" name="phone" type="tel"></div>
+                <div class="col-sm-6 member-only"><label class="form-label">Date of birth</label><input class="form-control" name="dateOfBirth" type="date"></div>
+                <div class="col-sm-6 member-only"><label class="form-label">Member since</label><input class="form-control" name="joinedOn" disabled></div>
+                <div class="col-sm-6 member-only"><label class="form-label">Emergency contact</label><input class="form-control" name="emergencyContactName"></div>
+                <div class="col-sm-6 member-only"><label class="form-label">Emergency phone</label><input class="form-control" name="emergencyContactPhone" type="tel"></div>
+                <div class="col-12 trainer-only"><label class="form-label">Bio (shown to members)</label><textarea class="form-control" name="bio" rows="3" maxlength="500"></textarea></div>
+              </div>
+              <button class="btn btn-primary mt-4" type="submit">Save changes</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-5">
+        <div class="card">
+          <div class="card-header">Change password</div>
+          <div class="card-body">
+            <form id="passwordForm" novalidate>
+              <div class="mb-3"><label class="form-label">Current password</label><input class="form-control" name="currentPassword" type="password" autocomplete="current-password" required></div>
+              <div class="mb-3"><label class="form-label">New password</label><input class="form-control" name="newPassword" type="password" autocomplete="new-password" required>
+                <div class="form-text">At least 8 characters, with a letter and a digit.</div></div>
+              <button class="btn btn-outline-primary" type="submit">Update password</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script type="module" src="/js/pages/profile.js"></script>
+</body>
+</html>
