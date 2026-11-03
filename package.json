@@ -1,18 +1,19 @@
 {
-  "name": "databasedesign",
+  "name": "binaryfit-gym",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Gym Membership and Training Booking System (Binary Minds, Database Design project)",
+  "main": "src/server.js",
   "directories": {
     "doc": "docs",
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "db:reset": "node scripts/db-reset.js",
+    "db:seed": "node scripts/generate-seed.js",
+    "test": "NODE_ENV=test jest --runInBand"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "type": "commonjs",
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -35,5 +36,9 @@
   },
   "overrides": {
     "mysql2": "$mysql2"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=20"
   }
 }
