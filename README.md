@@ -17,6 +17,12 @@ The database is normalized to **3NF (and BCNF)**. Its business rules are enforce
 | Frontend | HTML5, CSS3, vanilla JavaScript modules, Bootstrap 5.3, Bootstrap Icons, Chart.js |
 | Tests | Jest + Supertest (62 tests) |
 
+| Member: book a session | Admin: dashboard |
+|---|---|
+| ![Booking page](docs/screenshots/member-booking.jpg) | ![Admin dashboard](docs/screenshots/admin-dashboard.jpg) |
+| **Member: dashboard** | **Trainer: today** |
+| ![Member dashboard](docs/screenshots/member-dashboard.jpg) | ![Trainer dashboard](docs/screenshots/trainer-dashboard.jpg) |
+
 ---
 
 ## 1. Setup (first time)
