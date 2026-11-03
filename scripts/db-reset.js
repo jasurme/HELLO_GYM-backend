@@ -18,7 +18,9 @@ async function resetDatabase({ seed = true, log = console.log } = {}) {
   const conn = await connect();
   try {
     // Sessions point at user ids, which a reset reuses for different people.
-    await conn.query('DROP TABLE IF EXISTS sessions');
+    // Empty the table (rather than drop it) so a running server keeps working.
+    const [sessionTable] = await conn.query("SHOW TABLES LIKE 'sessions'");
+    if (sessionTable.length) await conn.query('DELETE FROM sessions');
     for (const file of SCHEMA_FILES) {
       const count = await runSqlFile(conn, path.join(DB_DIR, file));
       log(`  ${file.padEnd(16)} ${count} statements`);

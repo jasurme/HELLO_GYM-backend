@@ -1,6 +1,7 @@
 -- =====================================================================
---  Management reports. The admin dashboard runs these same queries
---  (src/services/reports.js); here they are ready to run in Workbench.
+--  Management reports. The admin dashboard runs these exact queries:
+--  src/services/reports.js loads each one by its `-- @name` tag.
+--  They are also ready to run as-is in Workbench.
 --  Built on the views in 02_views.sql.
 -- =====================================================================
 
@@ -9,6 +10,7 @@
 -- ---------------------------------------------------------------------
 
 -- 1a. Members per subscription status today
+-- @name active_by_status
 SELECT status, COUNT(*) AS subscriptions
 FROM v_subscription_status
 WHERE status IN ('active', 'frozen', 'upcoming', 'pending_payment')
@@ -16,6 +18,7 @@ GROUP BY status
 ORDER BY FIELD(status, 'active', 'frozen', 'upcoming', 'pending_payment');
 
 -- 1b. Active memberships per plan, with share of the total
+-- @name active_by_plan
 SELECT
   p.plan_name,
   p.duration_months,
@@ -32,6 +35,7 @@ ORDER BY active_members DESC;
 -- ---------------------------------------------------------------------
 
 -- 2a. Headline figures: this month, this year, all time
+-- @name revenue_headline
 SELECT
   SUM(CASE WHEN paid_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN amount_krw ELSE 0 END) AS this_month_krw,
   SUM(CASE WHEN paid_at >= DATE_FORMAT(CURDATE(), '%Y-01-01') THEN amount_krw ELSE 0 END) AS this_year_krw,
@@ -40,6 +44,7 @@ FROM payments
 WHERE status = 'paid';
 
 -- 2b. Revenue by plan and payment method (last 12 months)
+-- @name revenue_by_plan_method
 SELECT
   mp.plan_name,
   pay.method,
@@ -53,6 +58,7 @@ WHERE pay.status = 'paid'
 GROUP BY mp.plan_name, pay.method WITH ROLLUP;
 
 -- 2c. Outstanding balances (sold but not fully paid)
+-- @name outstanding_balances
 SELECT subscription_id, member_name, plan_name, price_krw, paid_krw, balance_krw, start_date
 FROM v_subscription_status
 WHERE status = 'pending_payment'
@@ -63,11 +69,13 @@ ORDER BY start_date;
 -- ---------------------------------------------------------------------
 
 -- 3a. Lifetime totals per trainer (view), busiest first
+-- @name trainer_lifetime
 SELECT *
 FROM v_trainer_booking_stats
 ORDER BY completed DESC;
 
 -- 3b. Sessions per trainer in a date range (here: the last 30 days)
+-- @name trainer_last_30_days
 SELECT
   trainer_name,
   COUNT(*)                                          AS sessions,
@@ -86,6 +94,7 @@ ORDER BY sessions DESC;
 -- Report 4: Monthly revenue trend, last 12 months.
 -- A recursive CTE produces every month so months with no payments show 0.
 -- ---------------------------------------------------------------------
+-- @name revenue_trend
 WITH RECURSIVE months AS (
   SELECT DATE_FORMAT(CURDATE(), '%Y-%m-01') - INTERVAL 11 MONTH AS month_start
   UNION ALL
@@ -104,6 +113,7 @@ ORDER BY m.month_start;
 -- ---------------------------------------------------------------------
 -- Report 5: Subscriptions expiring soon (next 7 and 30 days)
 -- ---------------------------------------------------------------------
+-- @name expiring_soon
 SELECT
   member_name,
   member_email,

@@ -425,6 +425,14 @@ function generateSeed({ now = new Date(), seed = 20261103 } = {}) {
     });
   }
 
+  // The demo trainer always has a couple of recent sessions left to mark.
+  const demoTrainerId = trainers[0].id;
+  subscriptions.flatMap((s) => s.bookings)
+    .filter((b) => b.trainerId === demoTrainerId && b.status !== 'cancelled' && b.endsAt <= now && b.startsAt >= addDays(now, -4))
+    .sort((a, b) => b.startsAt - a.startsAt)
+    .slice(0, 2)
+    .forEach((b) => { b.status = 'booked'; b.trainerNote = null; });
+
   // Two long-gone members get deactivated (after their history is loaded).
   const deactivated = members.filter((m) => !m.spec.demo
     && subscriptions.filter((s) => s.member === m).every((s) => s.effectiveEnd < addDays(today, -120))).slice(0, 2);
