@@ -48,6 +48,7 @@ async function connect({ database = env.db.name } = {}) {
     socketPath: env.db.socketPath,
     host: env.db.host,
     port: env.db.port,
+    charset: env.db.charset,
     dateStrings: true,
   });
   await conn.query('SET time_zone = ?', [env.timezone]);

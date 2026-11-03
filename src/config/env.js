@@ -33,5 +33,8 @@ module.exports = {
     socketPath: process.env.DB_SOCKET || undefined,
     host: process.env.DB_HOST || '127.0.0.1',
     port: Number(process.env.DB_PORT || 3306),
+    // Match the database default; mysql2's default (utf8mb4_unicode_ci) makes
+    // string literals clash with view columns ("Illegal mix of collations").
+    charset: 'UTF8MB4_0900_AI_CI',
   },
 };

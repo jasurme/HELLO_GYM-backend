@@ -12,7 +12,8 @@
     "dev": "node --watch src/server.js",
     "db:reset": "node scripts/db-reset.js",
     "db:seed": "node scripts/generate-seed.js",
-    "test": "NODE_ENV=test jest --runInBand"
+    "test": "NODE_ENV=test jest --runInBand",
+    "db:check-rules": "node scripts/check-rules.js"
   },
   "type": "commonjs",
   "dependencies": {

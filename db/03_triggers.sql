@@ -13,7 +13,8 @@
 DELIMITER $$
 
 -- ---------------------------------------------------------------------
--- assert_booking_rules: R1–R5 and R12 for a live (non-cancelled) session
+-- assert_booking_rules: R12, R1, R5, R4, R2, R3 for a live session,
+-- in that order so the most fundamental problem is reported first
 -- ---------------------------------------------------------------------
 DROP PROCEDURE IF EXISTS assert_booking_rules $$
 CREATE PROCEDURE assert_booking_rules(
@@ -33,38 +34,6 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM users WHERE user_id = p_trainer_id AND is_active) THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R12] The trainer account is inactive';
-  END IF;
-
-  -- R4: the whole session must fit inside one of the trainer's weekly windows
-  IF NOT EXISTS (
-      SELECT 1 FROM trainer_availability a
-      WHERE a.trainer_id  = p_trainer_id
-        AND a.day_of_week = WEEKDAY(p_starts_at) + 1
-        AND a.start_time <= TIME(p_starts_at)
-        AND a.end_time   >= TIME(p_ends_at)) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R4] The session is outside the trainer''s working hours';
-  END IF;
-
-  -- R2: a trainer cannot be in two sessions at once
-  IF EXISTS (
-      SELECT 1 FROM bookings b
-      WHERE b.trainer_id = p_trainer_id
-        AND b.status <> 'cancelled'
-        AND (p_booking_id IS NULL OR b.booking_id <> p_booking_id)
-        AND b.starts_at < p_ends_at
-        AND b.ends_at   > p_starts_at) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R2] The trainer already has a session at this time';
-  END IF;
-
-  -- R3: a member cannot be in two sessions at once
-  IF EXISTS (
-      SELECT 1 FROM bookings b
-      WHERE b.member_id = p_member_id
-        AND b.status <> 'cancelled'
-        AND (p_booking_id IS NULL OR b.booking_id <> p_booking_id)
-        AND b.starts_at < p_ends_at
-        AND b.ends_at   > p_starts_at) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R3] The member already has a session at this time';
   END IF;
 
   -- R1: a fully paid, non-cancelled, non-frozen subscription must cover
@@ -105,6 +74,38 @@ BEGIN
 
   IF v_used >= v_quota THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R5] The member has used all personal-training sessions for this month';
+  END IF;
+
+  -- R4: the whole session must fit inside one of the trainer's weekly windows
+  IF NOT EXISTS (
+      SELECT 1 FROM trainer_availability a
+      WHERE a.trainer_id  = p_trainer_id
+        AND a.day_of_week = WEEKDAY(p_starts_at) + 1
+        AND a.start_time <= TIME(p_starts_at)
+        AND a.end_time   >= TIME(p_ends_at)) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R4] The session is outside the trainer''s working hours';
+  END IF;
+
+  -- R2: a trainer cannot be in two sessions at once
+  IF EXISTS (
+      SELECT 1 FROM bookings b
+      WHERE b.trainer_id = p_trainer_id
+        AND b.status <> 'cancelled'
+        AND (p_booking_id IS NULL OR b.booking_id <> p_booking_id)
+        AND b.starts_at < p_ends_at
+        AND b.ends_at   > p_starts_at) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R2] The trainer already has a session at this time';
+  END IF;
+
+  -- R3: a member cannot be in two sessions at once
+  IF EXISTS (
+      SELECT 1 FROM bookings b
+      WHERE b.member_id = p_member_id
+        AND b.status <> 'cancelled'
+        AND (p_booking_id IS NULL OR b.booking_id <> p_booking_id)
+        AND b.starts_at < p_ends_at
+        AND b.ends_at   > p_starts_at) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R3] The member already has a session at this time';
   END IF;
 END $$
 

@@ -186,8 +186,17 @@ function generateSeed({ now = new Date(), seed = 20261103 } = {}) {
 
   // --- members ---------------------------------------------------------
   const memberSpecs = [...DEMO_MEMBERS.map((m) => ({ ...m, demo: true }))];
+  const usedNames = new Set(memberSpecs.map((m) => `${m.first} ${m.last}`));
+  const international = [...INTERNATIONAL];
   for (let i = 0; i < RANDOM_MEMBER_COUNT; i++) {
-    const [first, last] = R.chance(0.25) ? R.pick(INTERNATIONAL) : [R.pick(GIVEN), R.pick(FAMILY)];
+    let first;
+    let last;
+    do {
+      [first, last] = international.length && R.chance(0.25)
+        ? international.splice(R.int(0, international.length - 1), 1)[0]
+        : [R.pick(GIVEN), R.pick(FAMILY)];
+    } while (usedNames.has(`${first} ${last}`));
+    usedNames.add(`${first} ${last}`);
     memberSpecs.push({
       first, last,
       joinedDaysAgo: Math.floor(HISTORY_DAYS * Math.sqrt(R.rnd())),
@@ -386,8 +395,8 @@ function generateSeed({ now = new Date(), seed = 20261103 } = {}) {
         }
         break;
       } else {
-        if (!R.chance(open ? 0.8 : 0.9)) {
-          if (!open || !R.chance(0.3)) break;           // churned (some come back later)
+        if (!R.chance(open ? 0.88 : 0.9)) {
+          if (!open || !R.chance(0.45)) break;          // churned (some come back later)
           cursor = addDays(sub.effectiveEnd, R.int(30, 90));
         } else {
           cursor = addDays(sub.effectiveEnd, R.chance(0.7) ? 1 : R.int(3, 40));
