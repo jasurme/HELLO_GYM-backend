@@ -1,18 +1,24 @@
-const { Payment } = require('../models');
+const { sequelize, Payment, Subscription } = require('../models');
 const { select } = require('../lib/sql');
 const time = require('../lib/time');
 const { notFound } = require('../lib/http-error');
 
-// Front-desk payment (cash, card, transfer). R9 is enforced by the triggers.
+// Front-desk payment (cash, card, transfer). R9 is enforced by the triggers;
+// locking the subscription row first serializes concurrent payments for it.
 async function recordPayment({ subscriptionId, amountKrw, method, status, reference, recordedBy }) {
-  return Payment.create({
-    subscriptionId,
-    amountKrw,
-    method,
-    status,
-    reference,
-    recordedBy,
-    paidAt: status === 'paid' ? time.now() : null,
+  return sequelize.transaction(async (transaction) => {
+    if (!(await Subscription.findByPk(subscriptionId, { transaction, lock: transaction.LOCK.UPDATE }))) {
+      throw notFound('Subscription');
+    }
+    return Payment.create({
+      subscriptionId,
+      amountKrw,
+      method,
+      status,
+      reference,
+      recordedBy,
+      paidAt: status === 'paid' ? time.now() : null,
+    }, { transaction });
   });
 }
 

@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const { Op } = require('sequelize');
 const {
-  sequelize, Plan, Subscription, SubscriptionFreeze, Payment, SubscriptionStatus,
+  sequelize, Member, Plan, Subscription, SubscriptionFreeze, Payment, SubscriptionStatus,
 } = require('../models');
 const { select, selectOne } = require('../lib/sql');
 const time = require('../lib/time');
@@ -36,7 +36,12 @@ async function nextStartDate(memberId, { transaction } = {}) {
   return row?.lastEnd ? time.formatDate(time.addDays(time.parseLocal(row.lastEnd), 1)) : time.today();
 }
 
+// Serializes changes to one member's subscriptions, so the R6 overlap check
+// in trg_subscriptions_bi always sees a concurrent sale for the same member.
+const lockMember = (memberId, transaction) => Member.findByPk(memberId, { transaction, lock: transaction.LOCK.UPDATE });
+
 async function createSubscription({ memberId, planId, startDate, priceKrw, createdBy, allowInactivePlan = false }, { transaction }) {
+  if (!(await lockMember(memberId, transaction))) throw notFound('Member');
   const plan = await Plan.findByPk(planId, { transaction });
   if (!plan) throw notFound('Plan');
   if (!plan.isActive && !allowInactivePlan) throw conflict(`The ${plan.planName} plan is no longer on sale`);
@@ -56,6 +61,7 @@ const onlineReference = () => `PG-${crypto.randomInt(10000000, 99999999)}`;
 // Member buys or renews a plan online: subscription + pending online payment.
 async function purchaseOnline(memberId, planId) {
   return sequelize.transaction(async (transaction) => {
+    await lockMember(memberId, transaction);
     const live = await SubscriptionStatus.findAll({ where: { memberId, status: LIVE_STATUSES }, transaction, raw: true });
     const unpaid = live.find((s) => s.status === 'pending_payment');
     if (unpaid) throw conflict(`Please finish paying for your ${unpaid.planName} plan first`);
@@ -82,8 +88,10 @@ async function purchaseOnline(memberId, planId) {
 // reports it after the transaction instead of throwing inside it.
 async function checkout(memberId, subscriptionId, { simulateFailure = false } = {}) {
   return sequelize.transaction(async (transaction) => {
+    if (!(await Subscription.findOne({ where: { subscriptionId, memberId }, transaction, lock: transaction.LOCK.UPDATE }))) {
+      throw notFound('Subscription');
+    }
     const sub = await SubscriptionStatus.findOne({ where: { subscriptionId, memberId }, transaction, raw: true });
-    if (!sub) throw notFound('Subscription');
     if (sub.status === 'cancelled') throw conflict('This subscription was cancelled');
     if (sub.balanceKrw <= 0) throw conflict('This subscription is already paid');
 

@@ -296,4 +296,14 @@ All rules are demonstrated in [`db/06_rule_tests.sql`](../db/06_rule_tests.sql).
 
 ## 6. Concurrency
 
-Triggers check overlaps with `SELECT … EXISTS`, which on its own does not stop two simultaneous requests from both passing the check. The booking service therefore runs each booking in a transaction. It first locks the trainer's and member's profile rows (`SELECT … FOR UPDATE`), always in the same order to avoid deadlocks. Concurrent bookings for the same trainer or member are thus serialized, and the trigger always sees the other booking.
+Triggers check overlaps with `SELECT … EXISTS`, which on its own does not stop two simultaneous requests from both passing the check. The app handles this as follows:
+
+1. **App connections use READ COMMITTED.** At MySQL's default REPEATABLE READ, the SELECTs inside a trigger take shared *gap* locks. Two concurrent inserts into the same index gap then deadlock (MySQL error 1213); we saw this when selling plans to two new members at the same moment. Under READ COMMITTED, trigger reads are plain consistent reads, so there are no gap locks.
+2. **Explicit row locks serialize the races that matter.** Each operation locks a parent row with `SELECT … FOR UPDATE` before inserting:
+   - booking → the trainer row, then the member row (always in that order, so there are no deadlocks; R2/R3/R5)
+   - selling a subscription → the member row (R6)
+   - recording a payment or checking out → the subscription row (R9)
+
+   A second request for the same trainer, member or subscription waits. When it continues, the trigger sees the committed first row and rejects the conflict.
+
+`tests/booking.test.js` fires five simultaneous requests for the same slot: exactly one succeeds and four get `409 [R2]`.

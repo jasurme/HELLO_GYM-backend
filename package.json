@@ -3,10 +3,6 @@
   "version": "1.0.0",
   "description": "Gym Membership and Training Booking System (Binary Minds, Database Design project)",
   "main": "src/server.js",
-  "directories": {
-    "doc": "docs",
-    "test": "tests"
-  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
@@ -41,5 +37,10 @@
   "private": true,
   "engines": {
     "node": ">=20"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "globalSetup": "./tests/global-setup.js",
+    "testTimeout": 30000
   }
 }

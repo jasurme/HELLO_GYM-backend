@@ -41,4 +41,14 @@ const sequelize = new Sequelize(env.db.name, env.db.user, env.db.password, {
   },
 });
 
+// READ COMMITTED for every app connection. At MySQL's default (REPEATABLE
+// READ) the SELECTs inside our triggers take shared gap locks, so two
+// concurrent inserts into the same index gap (e.g. subscriptions for two new
+// members) deadlock. Concurrency for the business rules is instead handled by
+// explicit row locks: trainer + member rows for bookings, the member row for
+// subscriptions (R6) and the subscription row for payments (R9).
+sequelize.addHook('afterConnect', (connection) => new Promise((resolve, reject) => {
+  connection.query("SET SESSION transaction_isolation = 'READ-COMMITTED'", (err) => (err ? reject(err) : resolve()));
+}));
+
 module.exports = sequelize;
