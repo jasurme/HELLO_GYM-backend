@@ -1,27 +1,4 @@
-import { api, html, render, busy, $, queryParam } from '../app.js';
-
-const DEMO = [
-  ['admin@binaryfit.test', 'admin', 'Front desk: reports, members, payments'],
-  ['daniel.park@binaryfit.test', 'trainer', 'Daniel Park: schedule and availability'],
-  ['minji.kim@binaryfit.test', 'member', '6-month member, trains with Daniel weekly'],
-  ['sara.ahmed@binaryfit.test', 'member', 'Joined and paid online today'],
-  ['taeyang.seo@binaryfit.test', 'member', 'Gym only; renewal awaiting bank transfer'],
-  ['joonho.lee@binaryfit.test', 'member', 'Expired membership: cannot book'],
-  ['ethan.brooks@binaryfit.test', 'member', 'Membership frozen right now'],
-];
-const ROLE_COLORS = { admin: 'danger', trainer: 'success', member: 'primary' };
-
-render('#demoAccounts', DEMO.map(([email, role, note]) => html`
-  <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center px-1" data-email="${email}">
-    <span><span class="fw-semibold">${email}</span><br><span class="text-secondary">${note}</span></span>
-    <span class="badge bg-${ROLE_COLORS[role]}-subtle text-${ROLE_COLORS[role]}-emphasis">${role}</span>
-  </button>`));
-
-document.querySelectorAll('[data-email]').forEach((btn) => btn.addEventListener('click', () => {
-  $('#email').value = btn.dataset.email;
-  $('#password').value = 'Gym12345!';
-  $('#password').focus();
-}));
+import { api, busy, $, queryParam } from '../app.js';
 
 // Only follow same-site paths after login.
 const next = queryParam('next');

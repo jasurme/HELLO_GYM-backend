@@ -64,7 +64,7 @@ npm start                        # → http://localhost:3000
 | Member | `yuna.choi@binaryfit.test` | Plan ends within a week, so shows in "Expiring soon" |
 | Member | `ethan.brooks@binaryfit.test` | Membership frozen right now |
 
-Usernames are the email's first part (for example `@minji.kim`); you can log in with either. The login page lists these accounts. Click one to fill in the form. To try the sign-up, use **Join now** with any new email.
+Usernames are the email's first part (for example `@minji.kim`); you can log in with either. (The login page itself does not list them.) To try the sign-up, use **Join now** with any new email.
 
 ---
 
