@@ -31,8 +31,8 @@ SET @ethan_sub = (SELECT MAX(subscription_id) FROM subscriptions WHERE member_id
 SET @taeyang_renewal = (SELECT MAX(start_date) FROM subscriptions WHERE member_id = 12);
 
 -- A fresh test member with a 3-month membership, paid in cash.
-INSERT INTO users (role_id, email, password_hash, first_name, last_name)
-VALUES (3, 'rule.tester@binaryfit.test', REPEAT('x', 60), 'Rule', 'Tester');
+INSERT INTO users (role_id, email, username, password_hash, first_name, last_name)
+VALUES (3, 'rule.tester@binaryfit.test', 'rule.tester', REPEAT('x', 60), 'Rule', 'Tester');
 SET @tester = LAST_INSERT_ID();
 INSERT INTO members (member_id) VALUES (@tester);
 INSERT INTO subscriptions (member_id, plan_id, start_date, end_date, price_krw)
@@ -247,6 +247,29 @@ UPDATE subscriptions SET cancelled_at = NOW() WHERE subscription_id = @tester_su
 SELECT status, COUNT(*) AS sessions FROM bookings WHERE member_id = @tester GROUP BY status;
 -- show
 SELECT subscription_id, plan_name, status FROM v_subscription_status WHERE subscription_id = @tester_sub;
+
+-- ---------------------------------------------------------------------
+-- R13 · the social area is for active members and trainers
+-- ---------------------------------------------------------------------
+-- An administrator (user 1) cannot post.
+-- expect: R13
+INSERT INTO posts (author_id, body) VALUES (1, 'Hello from the front desk');
+
+-- Nobody follows themselves.
+-- expect: ck_follows_not_self
+INSERT INTO follows (follower_id, followee_id) VALUES (9, 9);
+
+-- Usernames follow the Instagram-style rule...
+-- expect: ck_users_username
+UPDATE users SET username = 'Not Valid!' WHERE user_id = 9;
+
+-- ...and are unique.
+-- expect: uq_users_username
+UPDATE users SET username = 'daniel.park' WHERE user_id = 9;
+
+-- What the feed algorithm knows about Minji: her interest per hashtag (view).
+-- show
+SELECT tag, score FROM v_user_tag_interest WHERE user_id = 9 ORDER BY score DESC LIMIT 5;
 
 -- Leave the database exactly as it was.
 ROLLBACK;

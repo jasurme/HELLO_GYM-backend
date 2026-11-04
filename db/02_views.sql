@@ -166,3 +166,49 @@ SELECT
 FROM bookings
 WHERE status <> 'cancelled'
 GROUP BY member_id, DATE_FORMAT(starts_at, '%Y-%m');
+
+-- =====================================================================
+--  Social area
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- v_post_stats: like and comment counts per post
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE VIEW v_post_stats AS
+SELECT
+  p.post_id,
+  (SELECT COUNT(*) FROM post_likes l    WHERE l.post_id = p.post_id) AS likes,
+  (SELECT COUNT(*) FROM post_comments c WHERE c.post_id = p.post_id) AS comments
+FROM posts p;
+
+-- ---------------------------------------------------------------------
+-- v_user_social_stats: profile header counts (posts, followers, following)
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE VIEW v_user_social_stats AS
+SELECT
+  u.user_id,
+  (SELECT COUNT(*) FROM posts p   WHERE p.author_id   = u.user_id) AS posts,
+  (SELECT COUNT(*) FROM follows f WHERE f.followee_id = u.user_id) AS followers,
+  (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.user_id) AS following
+FROM users u;
+
+-- ---------------------------------------------------------------------
+-- v_user_tag_interest: what each user likes, as a score per hashtag.
+-- It is derived from their own activity, so it is never stored:
+--   comment on a #tag post = 3, like = 2, own post using the #tag = 1.
+-- The "Suggested for you" feed ranks posts by these scores.
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE VIEW v_user_tag_interest AS
+SELECT x.user_id, x.tag_id, h.name AS tag, SUM(x.weight) AS score
+FROM (
+  SELECT l.user_id, ph.tag_id, 2 AS weight
+  FROM post_likes l JOIN post_hashtags ph ON ph.post_id = l.post_id
+  UNION ALL
+  SELECT c.author_id, ph.tag_id, 3
+  FROM post_comments c JOIN post_hashtags ph ON ph.post_id = c.post_id
+  UNION ALL
+  SELECT p.author_id, ph.tag_id, 1
+  FROM posts p JOIN post_hashtags ph ON ph.post_id = p.post_id
+) x
+JOIN hashtags h ON h.tag_id = x.tag_id
+GROUP BY x.user_id, x.tag_id, h.name;

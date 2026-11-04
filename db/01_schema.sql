@@ -4,13 +4,19 @@
 --
 --  Run order: 01_schema → 02_views → 03_triggers → 04_seed
 --  Normalized to 3NF. See docs/normalization.md for the walkthrough.
---  Business rules R1–R12 are listed in docs/design.md.
+--  Business rules R1–R13 are listed in docs/design.md.
 -- =====================================================================
 
 SET NAMES utf8mb4;
 
 -- Re-runnable: drop in reverse dependency order.
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS post_comments;
+DROP TABLE IF EXISTS post_likes;
+DROP TABLE IF EXISTS post_hashtags;
+DROP TABLE IF EXISTS hashtags;
+DROP TABLE IF EXISTS posts;
+DROP TABLE IF EXISTS follows;
 DROP TABLE IF EXISTS bookings;
 DROP TABLE IF EXISTS trainer_availability;
 DROP TABLE IF EXISTS payments;
@@ -49,16 +55,23 @@ CREATE TABLE users (
   password_hash CHAR(60)         NOT NULL,              -- bcrypt
   first_name    VARCHAR(50)      NOT NULL,
   last_name     VARCHAR(50)      NOT NULL,
+  username      VARCHAR(30)      NOT NULL,              -- public @handle in the social area
+  social_bio    VARCHAR(160)     NULL,                  -- one-line bio on the social profile
   phone         VARCHAR(20)      NULL,
   is_active     BOOLEAN          NOT NULL DEFAULT TRUE,  -- accounts are deactivated, never deleted
   created_at    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT pk_users       PRIMARY KEY (user_id),
   CONSTRAINT uq_users_email UNIQUE (email),
+  CONSTRAINT uq_users_username UNIQUE (username),        -- case-insensitive (utf8mb4_0900_ai_ci)
   CONSTRAINT fk_users_role  FOREIGN KEY (role_id) REFERENCES roles (role_id)
     ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT ck_users_email CHECK (email LIKE '%_@_%._%'),
-  CONSTRAINT ck_users_names CHECK (CHAR_LENGTH(TRIM(first_name)) > 0 AND CHAR_LENGTH(TRIM(last_name)) > 0)
+  CONSTRAINT ck_users_names CHECK (CHAR_LENGTH(TRIM(first_name)) > 0 AND CHAR_LENGTH(TRIM(last_name)) > 0),
+  -- Instagram-style handle: 3–30 lowercase letters, digits, '.' or '_',
+  -- starting and ending with a letter or digit, no '..'
+  CONSTRAINT ck_users_username CHECK (REGEXP_LIKE(username, '^[a-z0-9][a-z0-9._]{1,28}[a-z0-9]$', 'c')
+                                      AND username NOT LIKE '%..%')
 ) ENGINE = InnoDB;
 
 -- ---------------------------------------------------------------------
@@ -244,4 +257,99 @@ CREATE TABLE payments (
   CONSTRAINT ck_payments_amount       CHECK (amount_krw > 0),
   CONSTRAINT ck_payments_paid_at      CHECK ((status IN ('paid', 'refunded')) = (paid_at IS NOT NULL)),
   INDEX ix_payments_status_paid_at (status, paid_at)
+) ENGINE = InnoDB;
+
+-- =====================================================================
+--  Social area: follows, posts, hashtags, likes and comments.
+--  Users are deactivated, never deleted, so the user FKs RESTRICT
+--  (MySQL also forbids cascading actions on columns a CHECK uses).
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- follows: who follows whom (Instagram-style, one direction)
+-- ---------------------------------------------------------------------
+CREATE TABLE follows (
+  follower_id INT UNSIGNED NOT NULL,
+  followee_id INT UNSIGNED NOT NULL,
+  created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT pk_follows          PRIMARY KEY (follower_id, followee_id),
+  CONSTRAINT fk_follows_follower FOREIGN KEY (follower_id) REFERENCES users (user_id)
+    ON UPDATE RESTRICT ON DELETE RESTRICT,
+  CONSTRAINT fk_follows_followee FOREIGN KEY (followee_id) REFERENCES users (user_id)
+    ON UPDATE RESTRICT ON DELETE RESTRICT,
+  CONSTRAINT ck_follows_not_self CHECK (follower_id <> followee_id),
+  INDEX ix_follows_followee (followee_id)
+) ENGINE = InnoDB;
+
+-- ---------------------------------------------------------------------
+-- posts: short text posts (Twitter-style, 280 characters)
+-- ---------------------------------------------------------------------
+CREATE TABLE posts (
+  post_id    INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  author_id  INT UNSIGNED NOT NULL,
+  body       VARCHAR(280) NOT NULL,
+  created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT pk_posts        PRIMARY KEY (post_id),
+  CONSTRAINT fk_posts_author FOREIGN KEY (author_id) REFERENCES users (user_id)
+    ON UPDATE RESTRICT ON DELETE RESTRICT,
+  CONSTRAINT ck_posts_body   CHECK (CHAR_LENGTH(TRIM(body)) > 0),
+  INDEX ix_posts_author_time (author_id, created_at),
+  INDEX ix_posts_time (created_at)
+) ENGINE = InnoDB;
+
+-- ---------------------------------------------------------------------
+-- hashtags / post_hashtags: #tags parsed from post bodies (M:N). They
+-- drive the interest profile behind the "Suggested for you" feed.
+-- ---------------------------------------------------------------------
+CREATE TABLE hashtags (
+  tag_id SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name   VARCHAR(30)       NOT NULL,               -- stored without '#', lowercase
+  CONSTRAINT pk_hashtags      PRIMARY KEY (tag_id),
+  CONSTRAINT uq_hashtags_name UNIQUE (name),
+  CONSTRAINT ck_hashtags_name CHECK (REGEXP_LIKE(name, '^[a-z0-9_]{1,30}$', 'c'))
+) ENGINE = InnoDB;
+
+CREATE TABLE post_hashtags (
+  post_id INT UNSIGNED      NOT NULL,
+  tag_id  SMALLINT UNSIGNED NOT NULL,
+  CONSTRAINT pk_post_hashtags PRIMARY KEY (post_id, tag_id),
+  CONSTRAINT fk_post_tags_post FOREIGN KEY (post_id) REFERENCES posts (post_id)
+    ON UPDATE RESTRICT ON DELETE CASCADE,
+  CONSTRAINT fk_post_tags_tag  FOREIGN KEY (tag_id) REFERENCES hashtags (tag_id)
+    ON UPDATE RESTRICT ON DELETE RESTRICT,
+  INDEX ix_post_hashtags_tag (tag_id)
+) ENGINE = InnoDB;
+
+-- ---------------------------------------------------------------------
+-- post_likes: one like per user per post
+-- ---------------------------------------------------------------------
+CREATE TABLE post_likes (
+  user_id    INT UNSIGNED NOT NULL,
+  post_id    INT UNSIGNED NOT NULL,
+  created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT pk_post_likes      PRIMARY KEY (user_id, post_id),
+  CONSTRAINT fk_post_likes_user FOREIGN KEY (user_id) REFERENCES users (user_id)
+    ON UPDATE RESTRICT ON DELETE RESTRICT,
+  CONSTRAINT fk_post_likes_post FOREIGN KEY (post_id) REFERENCES posts (post_id)
+    ON UPDATE RESTRICT ON DELETE CASCADE,
+  INDEX ix_post_likes_post (post_id)
+) ENGINE = InnoDB;
+
+-- ---------------------------------------------------------------------
+-- post_comments: replies under a post
+-- ---------------------------------------------------------------------
+CREATE TABLE post_comments (
+  comment_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  post_id    INT UNSIGNED NOT NULL,
+  author_id  INT UNSIGNED NOT NULL,
+  body       VARCHAR(280) NOT NULL,
+  created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT pk_post_comments        PRIMARY KEY (comment_id),
+  CONSTRAINT fk_post_comments_post   FOREIGN KEY (post_id) REFERENCES posts (post_id)
+    ON UPDATE RESTRICT ON DELETE CASCADE,
+  CONSTRAINT fk_post_comments_author FOREIGN KEY (author_id) REFERENCES users (user_id)
+    ON UPDATE RESTRICT ON DELETE RESTRICT,
+  CONSTRAINT ck_post_comments_body   CHECK (CHAR_LENGTH(TRIM(body)) > 0),
+  INDEX ix_post_comments_post_time (post_id, created_at),
+  INDEX ix_post_comments_author (author_id)
 ) ENGINE = InnoDB;

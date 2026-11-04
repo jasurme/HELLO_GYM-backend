@@ -3,6 +3,7 @@ const rateLimit = require('express-rate-limit');
 const { User } = require('../models');
 const users = require('../services/users');
 const subscriptions = require('../services/subscriptions');
+const usernames = require('../services/usernames');
 const { requireAuth } = require('../middleware/auth');
 const {
   badRequest, unauthorized, forbidden, conflict,
@@ -34,6 +35,7 @@ function logIn(req, user) {
 
 const detailsSchema = v.z.object({
   email: v.email,
+  username: v.z.string().trim().min(1, 'Choose a username').max(40),
   password: v.password,
   firstName: v.name,
   lastName: v.name,
@@ -46,8 +48,16 @@ async function checkDetails(body) {
   if (await User.findOne({ where: { email: details.email } })) {
     throw conflict('An account with this email already exists', { fields: { email: 'This email is already registered' } });
   }
-  return details;
+  const handle = await usernames.status(details.username);
+  if (!handle.available) throw conflict(handle.reason, { fields: { username: handle.reason } });
+  return { ...details, username: handle.username };
 }
+
+// Live check while typing a username (sign-up and profile settings).
+router.get('/username', async (req, res) => {
+  const { username } = v.validate(v.z.object({ username: v.z.string().max(60).default('') }), req.query);
+  res.json(await usernames.status(username, { exceptUserId: req.user?.userId }));
+});
 
 // Sign-up step 1 (details) is checked before the member picks a plan.
 router.post('/register/check', loginLimiter, async (req, res) => {
@@ -100,6 +110,8 @@ router.get('/me', requireAuth, async (req, res) => {
 const profileSchema = v.z.object({
   firstName: v.name.optional(),
   lastName: v.name.optional(),
+  username: v.z.string().trim().max(40).optional(),
+  socialBio: v.optionalText(160),
   phone: v.phone,
   dateOfBirth: v.optionalDate,
   emergencyContactName: v.optionalText(100),
@@ -112,7 +124,12 @@ const profileSchema = v.z.object({
 router.patch('/me', requireAuth, async (req, res) => {
   const data = v.validate(profileSchema, req.body);
   const account = {};
-  for (const key of ['firstName', 'lastName', 'phone']) if (key in req.body) account[key] = data[key];
+  for (const key of ['firstName', 'lastName', 'phone', 'socialBio']) if (key in req.body) account[key] = data[key];
+  if (data.username !== undefined) {
+    const handle = await usernames.status(data.username, { exceptUserId: req.user.userId });
+    if (!handle.available) throw conflict(handle.reason, { fields: { username: handle.reason } });
+    account.username = handle.username;
+  }
   const profile = {};
   const profileKeys = req.user.role === 'member'
     ? ['dateOfBirth', 'emergencyContactName', 'emergencyContactPhone']

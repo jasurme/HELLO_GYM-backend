@@ -32,6 +32,8 @@ async function loginAs(email, password = PASSWORD) {
 
 let counter = 0;
 const uniqueEmail = (prefix = 'test') => `${prefix}.${Date.now()}.${++counter}@binaryfit.test`;
+// A free @username: letters and digits only, at most 30 characters.
+const uniqueUsername = (prefix = 'user') => `${prefix}${Date.now().toString(36)}${++counter}`.slice(0, 30);
 
 const pad = (n) => String(n).padStart(2, '0');
 const isoDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -61,5 +63,5 @@ async function memberWithPlan(admin, { planId = PLANS.quarter, firstName = 'Test
 afterAll(() => sequelize.close());
 
 module.exports = {
-  app, request, sequelize, SEED, PLANS, RATES, PASSWORD, loginAs, uniqueEmail, futureWeekday, isoDate, memberWithPlan,
+  app, request, sequelize, SEED, PLANS, RATES, PASSWORD, loginAs, uniqueEmail, uniqueUsername, futureWeekday, isoDate, memberWithPlan,
 };

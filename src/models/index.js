@@ -22,6 +22,8 @@ const User = sequelize.define('User', {
   passwordHash: { type: CHAR(60), allowNull: false },
   firstName: { type: STRING(50), allowNull: false },
   lastName: { type: STRING(50), allowNull: false },
+  username: { type: STRING(30), allowNull: false },
+  socialBio: STRING(160),
   phone: STRING(20),
   isActive: { type: BOOLEAN, allowNull: false, defaultValue: true },
 }, {

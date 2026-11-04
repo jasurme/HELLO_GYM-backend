@@ -1,5 +1,5 @@
 const {
-  app, request, SEED, PLANS, loginAs, uniqueEmail, futureWeekday, isoDate, memberWithPlan,
+  app, request, SEED, PLANS, loginAs, uniqueEmail, uniqueUsername, futureWeekday, isoDate, memberWithPlan,
 } = require('./helpers');
 
 const addDays = (iso, n) => {
@@ -18,7 +18,7 @@ describe('memberships and payments', () => {
   async function newMemberAgent(planId = PLANS.month) {
     const agent = request.agent(app);
     const res = await agent.post('/api/auth/register').send({
-      email: uniqueEmail('buyer'), password: 'Buyer1234', firstName: 'Buy', lastName: 'Er', planId,
+      email: uniqueEmail('buyer'), username: uniqueUsername('buyer'), password: 'Buyer1234', firstName: 'Buy', lastName: 'Er', planId,
     });
     expect(res.status).toBe(201);
     const overview = await agent.get('/api/member/overview');

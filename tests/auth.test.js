@@ -1,11 +1,11 @@
 const {
-  app, request, SEED, PLANS, PASSWORD, loginAs, uniqueEmail,
+  app, request, SEED, PLANS, PASSWORD, loginAs, uniqueEmail, uniqueUsername,
 } = require('./helpers');
 
 describe('authentication', () => {
   test('sign-up: details first, then a plan paid online; the account exists only once paid', async () => {
     const email = uniqueEmail('signup');
-    const details = { email, password: 'Strong123', firstName: 'New', lastName: 'Member', phone: '010-1111-2222' };
+    const details = { email, username: uniqueUsername('newbie'), password: 'Strong123', firstName: 'New', lastName: 'Member', phone: '010-1111-2222' };
 
     // Step 1: the details are checked without creating anything
     expect((await request(app).post('/api/auth/register/check').send(details)).status).toBe(204);
@@ -25,7 +25,7 @@ describe('authentication', () => {
     const agent = request.agent(app);
     const res = await agent.post('/api/auth/register').send({ ...details, planId: PLANS.quarter });
     expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({ email, role: 'member', firstName: 'New' });
+    expect(res.body).toMatchObject({ email, role: 'member', firstName: 'New', username: details.username });
     expect(res.body.member.joinedOn).toBeTruthy();
     expect(res.body).not.toHaveProperty('passwordHash');
 
@@ -50,7 +50,7 @@ describe('authentication', () => {
 
     for (const path of ['/api/auth/register/check', '/api/auth/register']) {
       const dup = await request(app).post(path).send({
-        email: SEED.minji, password: 'Strong123', firstName: 'A', lastName: 'B', planId: PLANS.month,
+        email: SEED.minji, username: uniqueUsername('dup'), password: 'Strong123', firstName: 'A', lastName: 'B', planId: PLANS.month,
       });
       expect(dup.status).toBe(409);
       expect(dup.body.error.fields).toHaveProperty('email');
@@ -94,7 +94,9 @@ describe('authentication', () => {
   test('members can update their profile and change their password', async () => {
     const email = uniqueEmail('profile');
     const agent = request.agent(app);
-    await agent.post('/api/auth/register').send({ email, password: 'First1234', firstName: 'Pro', lastName: 'File', planId: PLANS.month });
+    await agent.post('/api/auth/register').send({
+      email, username: uniqueUsername('pro'), password: 'First1234', firstName: 'Pro', lastName: 'File', planId: PLANS.month,
+    });
 
     const patched = await agent.patch('/api/auth/me').send({ phone: '010-3333-4444', emergencyContactName: 'Mom' });
     expect(patched.status).toBe(200);

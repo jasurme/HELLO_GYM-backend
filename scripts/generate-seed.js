@@ -89,6 +89,93 @@ const TRAINER_NOTES = ['Good form on squats, add 2.5 kg next time', 'Worked on h
   'New personal best on deadlift', 'Reviewed meal plan and weekly goals', 'Technique drills, slow tempo', null, null];
 const MEMBER_NOTES = ['Lower back is a bit sore', 'Want to focus on legs', 'Preparing for a 10K run',
   'First session after holidays', 'Please include stretching', null, null, null, null];
+// ---------------------------------------------------------------------
+// Social area: topics (one per trainer specialty, plus running), what
+// trainers and members post about them, and short comments.
+// ---------------------------------------------------------------------
+const TRAINER_TOPICS = ['strength', 'yoga', 'boxing', 'nutrition', 'recovery', 'pilates'];
+const TOPICS = ['strength', 'yoga', 'boxing', 'nutrition', 'recovery', 'pilates', 'running'];
+const TRAINER_POSTS = {
+  strength: [
+    'Form check: keep your ribs down and brace before every rep. Heavy is earned, not rushed. #strength #technique',
+    'Leg day plan: squats, RDLs, walking lunges. 4 sets each, 90 seconds rest. Who is in? #legday #strength',
+    'Progressive overload is not only more weight. Add a rep, a set, or better control. #strength #gains',
+    'Deadlift tip: push the floor away instead of pulling the bar. A game changer for most of my clients. #deadlift #strength',
+  ],
+  yoga: [
+    'Five minutes of hip openers after every workout will change how you feel on Monday. #yoga #mobility',
+    'Breathing is the first exercise. Inhale for 4, hold for 4, exhale for 6. Try it before bed. #yoga #recovery',
+    'New evening flow this Thursday at 18:00. Bring your mat and an open mind 🧘 #yoga #stretching',
+  ],
+  boxing: [
+    '30 seconds on, 30 off, 10 rounds. Simple, brutal, effective. #hiit #boxing',
+    'Keep your hands up even when you are tired. Especially when you are tired 🥊 #boxing #cardio',
+    'Pad work tomorrow at 18:00, a few spots left. Book through the app! #boxing #hiit',
+  ],
+  nutrition: [
+    'Protein at every meal: eggs, tofu, chicken, Greek yogurt. Easy wins. #nutrition #mealprep',
+    'Meal prep Sunday: rice, roasted veggies, chicken thighs, kimchi on the side 🍱 #mealprep #nutrition',
+    'Weight loss happens mostly in the kitchen. Training builds what you keep. #weightloss #nutrition',
+  ],
+  recovery: [
+    'Desk all day? Ten wall angels and ten chin tucks every hour. Your neck will thank you. #posture #recovery',
+    'Sleep is the cheapest recovery tool you have. Aim for 7 to 9 hours. #recovery',
+    'Coming back from an injury: slow is fast. Pain-free range first, load second. #recovery #mobility',
+  ],
+  pilates: [
+    'Core is not just abs. Think 360° bracing: front, sides and back. #pilates #core',
+    'Dead bugs, bird dogs, side planks. Three moves, ten minutes, a stronger back. #core #pilates',
+    'Mat Pilates on Saturday at 10:00 still has spots! #pilates',
+  ],
+};
+const MEMBER_POSTS = {
+  strength: [
+    'New deadlift PR today: {kg} kg! 💪 #deadlift #progress',
+    'Survived leg day. Stairs are now my enemy. #legday',
+    'Squatted {kg} kg for 5 reps, finally! #strength #progress',
+    '{weeks} weeks of consistent training and my bench is up {small} kg. #gains #progress',
+  ],
+  yoga: [
+    'Finally touched my toes after {weeks} weeks of stretching 🧘 #yoga #mobility',
+    'Morning yoga before work changes the whole day. #yoga',
+    'That hip mobility session was exactly what I needed. #mobility #stretching',
+  ],
+  boxing: [
+    'First boxing session done. My shoulders are on fire 🥊 #boxing',
+    'The HIIT class this evening was no joke. #hiit #cardio',
+    'Hit the pads for {rounds} rounds today. Felt amazing. #boxing #hiit',
+  ],
+  nutrition: [
+    'Meal prep done for the week 🍱 #mealprep',
+    'Down {small} kg this month without starving myself. #weightloss #progress',
+    'Tried a high-protein bibimbap today, 10/10. #nutrition',
+  ],
+  recovery: [
+    'My back pain is finally gone thanks to the posture sessions. #recovery #posture',
+    'Foam rolling hurts, but it works. #recovery',
+  ],
+  pilates: [
+    'Pilates core class today. I can feel muscles I did not know I had. #pilates #core',
+    'Plank PR: {sec} seconds! #core',
+  ],
+  running: [
+    'Ran {km} km this morning before the gym 🏃 #running #cardio',
+    'Signed up for a 10K next month! #running #10k',
+    'Treadmill intervals today: {rounds} rounds of one minute fast, one minute easy. #running #cardio',
+  ],
+};
+const GENERAL_POSTS = [
+  'Consistency over motivation. Day {streak} of not skipping. #motivation',
+  'Gym at 6 am hits different. #motivation',
+  'Rest day today, back stronger tomorrow. #recovery #motivation',
+];
+const COMMENTS = ['Great work! 🔥', 'Let\'s go! 💪', 'Respect.', 'Need to try this', 'Love this!', 'So true',
+  'See you at the gym!', 'Thanks for the tip!', 'Saving this', 'Huge progress 👏', 'How long did that take you?', 'Same here 😅'];
+const TRAINER_COMMENTS = ['Proud of you! Keep it up.', 'That is what consistency looks like 👏', 'Great session today!'];
+const SOCIAL_BIOS = ['Lifting, eating, sleeping. Repeat.', 'Early bird at the gym ☀️', 'Training for my first 10K',
+  'Slowly getting stronger', 'Yoga + coffee', 'Back to training after a long break', null, null, null];
+const TAG_RE = /#([a-z0-9_]{1,30})/gi; // same rule as src/services/social.js
+
 const FREEZE_REASONS = ['Business trip', 'Travel abroad', 'Minor injury', 'Exam period', 'Family event'];
 
 // ---------------------------------------------------------------------
@@ -166,7 +253,7 @@ function generateSeed({ now = new Date(), seed = 20261103 } = {}) {
     let email = u.email || `${slug(u.first)}.${slug(u.last)}@${DOMAIN}`;
     for (let n = 2; emails.has(email); n++) email = `${slug(u.first)}.${slug(u.last)}${n}@${DOMAIN}`;
     emails.add(email);
-    const user = { id: users.length + 1, ...u, email };
+    const user = { id: users.length + 1, ...u, email, username: email.split('@')[0] };
     users.push(user);
     return user;
   };
@@ -181,6 +268,7 @@ function generateSeed({ now = new Date(), seed = 20261103 } = {}) {
     for (const [days, from, to] of t.windows) {
       for (const d of days) (windowsByDay[d] ||= []).push({ from: toMinutes(from), to: toMinutes(to), fromText: from, toText: to });
     }
+    user.socialBio = `${t.specialization} coach at BinaryFit`;
     return { ...user, specialization: t.specialization, bio: t.bio, rate: t.rate, hiredOn: hired, windowsByDay };
   });
 
@@ -450,6 +538,100 @@ function generateSeed({ now = new Date(), seed = 20261103 } = {}) {
     && subscriptions.filter((s) => s.member === m).every((s) => s.effectiveEnd < addDays(today, -120))).slice(0, 2);
 
   // ---------------------------------------------------------------------
+  // Social area. Each member is interested in their favourite trainer's
+  // topic (and sometimes one more); follows, posts and likes lean towards
+  // those interests, so the "Suggested for you" ranking has real signal.
+  // ---------------------------------------------------------------------
+  const socialMembers = members.filter((m) => !deactivated.includes(m));
+  trainers.forEach((t, i) => { t.topics = [TRAINER_TOPICS[i]]; });
+  for (const m of socialMembers) {
+    m.topics = [TRAINER_TOPICS[trainers.indexOf(m.favorite)]];
+    if (R.chance(0.5)) m.topics.push(R.pick(TOPICS.filter((x) => !m.topics.includes(x))));
+    m.socialBio = R.pick(SOCIAL_BIOS);
+  }
+  const socialUsers = [...trainers, ...socialMembers];
+  const isNew = (u) => daysBetween(u.createdAt, now) < 2;   // e.g. Sara: joined today
+  const later = (a, b) => (a > b ? a : b);
+
+  // Follows (follower → followee), never twice, never yourself
+  const follows = new Map();
+  const follow = (a, b) => {
+    const key = `${a.id}|${b.id}`;
+    if (a === b || follows.has(key)) return;
+    const from = later(a.createdAt, b.createdAt);
+    const at = new Date(from.getTime() + R.rnd() * Math.max(now - from, 60000));
+    follows.set(key, { follower: a, followee: b, at });
+  };
+  for (const m of socialMembers) {
+    if (isNew(m)) continue;                                        // brand-new members follow nobody yet
+    if (R.chance(0.9)) follow(m, m.favorite);
+    if (R.chance(0.4)) follow(m, R.pick(trainers));
+    const others = socialMembers.filter((o) => o !== m && !isNew(o));
+    for (let n = R.int(3, 10); n > 0; n--) {
+      const similar = others.filter((o) => o.topics.some((t) => m.topics.includes(t)));
+      follow(m, R.chance(0.7) && similar.length ? R.pick(similar) : R.pick(others));
+    }
+  }
+  for (const t of trainers) {
+    const clients = socialMembers.filter((m) => m.favorite === t && !isNew(m));
+    for (const c of clients.slice(0, R.int(4, 10))) follow(t, c);
+  }
+  for (const f of [...follows.values()]) {
+    if (R.chance(0.5)) follow(f.followee, f.follower);           // follow back
+  }
+  const followsKey = (a, b) => follows.has(`${a.id}|${b.id}`);
+
+  // Posts
+  const fill = (text) => text
+    .replace('{kg}', R.int(60, 160)).replace('{weeks}', R.int(4, 16)).replace('{small}', R.int(2, 8))
+    .replace('{rounds}', R.int(6, 12)).replace('{sec}', R.int(90, 240)).replace('{km}', R.int(3, 12))
+    .replace('{streak}', R.int(20, 120));
+  const postTime = (u) => {
+    const from = later(u.createdAt, addDays(now, -45));
+    return new Date(from.getTime() + R.rnd() * Math.max(now - from, 60000));
+  };
+  const posts = [];
+  const addPost = (author, body) => posts.push({ id: posts.length + 1, author, body, at: postTime(author) });
+  for (const t of trainers) {
+    const tips = [...TRAINER_POSTS[t.topics[0]]];
+    for (let n = R.int(5, 8); n > 0; n--) addPost(t, R.chance(0.8) && tips.length ? tips.splice(R.int(0, tips.length - 1), 1)[0] : fill(R.pick(GENERAL_POSTS)));
+  }
+  for (const m of socialMembers) {
+    if (isNew(m) || (!m.spec.demo && !R.chance(0.7))) continue;   // demo members always post
+    for (let n = R.int(m.spec.demo ? 3 : 1, 5); n > 0; n--) {
+      addPost(m, fill(R.chance(0.85) ? R.pick(MEMBER_POSTS[R.pick(m.topics)]) : R.pick(GENERAL_POSTS)));
+    }
+  }
+  posts.sort((a, b) => a.at - b.at).forEach((post, i) => { post.id = i + 1; });
+
+  // Hashtags, parsed with the same rule as the app
+  const tagIds = new Map();
+  for (const post of posts) {
+    post.tags = [...new Set([...post.body.matchAll(TAG_RE)].map((mt) => mt[1].toLowerCase()))];
+    post.topics = post.tags;
+    for (const tag of post.tags) if (!tagIds.has(tag)) tagIds.set(tag, tagIds.size + 1);
+  }
+
+  // Likes and comments: more likely from followers and people who share the topic
+  const likes = [];
+  const comments = [];
+  for (const post of posts) {
+    for (const u of socialUsers) {
+      if (u === post.author || isNew(u) || u.createdAt > post.at) continue;
+      const interested = (u.topics || []).some((t) => post.tags.some((tag) => tag.includes(t) || t.includes(tag)));
+      const p = 0.02 + (followsKey(u, post.author) ? 0.3 : 0) + (interested ? 0.2 : 0);
+      if (!R.chance(p)) continue;
+      const at = new Date(Math.min(now.getTime(), post.at.getTime() + R.int(5, 48 * 60) * 60000));
+      likes.push({ user: u, post, at });
+      if (R.chance(0.18)) {
+        const text = trainers.includes(u) ? R.pick(TRAINER_COMMENTS) : R.pick(COMMENTS);
+        comments.push({ author: u, post, body: text, at: new Date(Math.min(now.getTime(), at.getTime() + 60000)) });
+      }
+    }
+  }
+  comments.sort((a, b) => a.at - b.at);
+
+  // ---------------------------------------------------------------------
   // SQL output
   // ---------------------------------------------------------------------
   const v = (value) => {
@@ -469,8 +651,8 @@ function generateSeed({ now = new Date(), seed = 20261103 } = {}) {
 SET NAMES utf8mb4;
 `);
 
-  out.push(`INSERT INTO users (user_id, role_id, email, password_hash, first_name, last_name, phone, is_active, created_at, updated_at) VALUES
-${rows(users.map((u) => [u.id, u.role, v(u.email), v(passwordHash), v(u.first), v(u.last), v(u.phone), 1, v(u.createdAt), v(u.createdAt)]))};
+  out.push(`INSERT INTO users (user_id, role_id, email, username, social_bio, password_hash, first_name, last_name, phone, is_active, created_at, updated_at) VALUES
+${rows(users.map((u) => [u.id, u.role, v(u.email), v(u.username), v(u.socialBio), v(passwordHash), v(u.first), v(u.last), v(u.phone), 1, v(u.createdAt), v(u.createdAt)]))};
 `);
 
   out.push(`INSERT INTO trainers (trainer_id, specialization, bio, hourly_rate_krw, hired_on) VALUES
@@ -532,6 +714,22 @@ ${rows(s.bookings.map(({ id, payment: p }) => [id, p.amount, v(p.method), v(p.st
     out.push('');
   }
 
+  // Social area (before any account is deactivated: R13 needs active users)
+  out.push(`-- Social area: follows, posts, hashtags, likes, comments`);
+  out.push(`INSERT INTO follows (follower_id, followee_id, created_at) VALUES
+${rows([...follows.values()].map((f) => [f.follower.id, f.followee.id, v(f.at)]))};`);
+  out.push(`INSERT INTO hashtags (tag_id, name) VALUES
+${rows([...tagIds].map(([name, id]) => [id, v(name)]))};`);
+  out.push(`INSERT INTO posts (post_id, author_id, body, created_at) VALUES
+${rows(posts.map((post) => [post.id, post.author.id, v(post.body), v(post.at)]))};`);
+  out.push(`INSERT INTO post_hashtags (post_id, tag_id) VALUES
+${rows(posts.flatMap((post) => post.tags.map((tag) => [post.id, tagIds.get(tag)])))};`);
+  out.push(`INSERT INTO post_likes (user_id, post_id, created_at) VALUES
+${rows(likes.map((l) => [l.user.id, l.post.id, v(l.at)]))};`);
+  out.push(`INSERT INTO post_comments (post_id, author_id, body, created_at) VALUES
+${rows(comments.map((c) => [c.post.id, c.author.id, v(c.body), v(c.at)]))};
+`);
+
   if (deactivated.length) {
     out.push(`-- Members who left more than four months ago: accounts deactivated
 UPDATE users SET is_active = FALSE WHERE user_id IN (${deactivated.map((m) => m.id).join(', ')});
@@ -549,6 +747,11 @@ UPDATE users SET is_active = FALSE WHERE user_id IN (${deactivated.map((m) => m.
     payments: paymentCount,
     freezes: subscriptions.reduce((n, s) => n + s.freezes.length, 0),
     bookings: bookingCount,
+    follows: follows.size,
+    posts: posts.length,
+    hashtags: tagIds.size,
+    likes: likes.length,
+    comments: comments.length,
   };
   return {
     sql: out.join('\n'),
@@ -557,7 +760,7 @@ UPDATE users SET is_active = FALSE WHERE user_id IN (${deactivated.map((m) => m.
       password: DEMO_PASSWORD,
       admin: admins[0].email,
       trainer: trainers[0].email,
-      members: members.filter((m) => m.spec.demo).map((m) => ({ email: m.email, story: m.spec.story })),
+      members: members.filter((m) => m.spec.demo).map((m) => ({ email: m.email, username: m.username, story: m.spec.story })),
     },
   };
 }

@@ -40,6 +40,14 @@
                 <label class="form-label" for="email">Email</label>
                 <input class="form-control" id="email" name="email" type="email" autocomplete="email" required>
               </div>
+              <div class="col-12 username-field">
+                <label class="form-label" for="username">Username</label>
+                <div class="input-group has-validation">
+                  <span class="input-group-text">@</span>
+                  <input class="form-control" id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" required>
+                </div>
+                <div class="username-status" id="usernameStatus" aria-live="polite"><span class="text-secondary">Your public name in the Social tab. Letters, numbers, periods and underscores.</span></div>
+              </div>
               <div class="col-sm-6">
                 <label class="form-label" for="phone">Phone <span class="text-secondary small">(optional)</span></label>
                 <input class="form-control" id="phone" name="phone" type="tel" placeholder="010-1234-5678" autocomplete="tel">

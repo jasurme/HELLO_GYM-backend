@@ -184,12 +184,14 @@ const NAV = {
     ['/member/book.html', 'calendar-plus', 'Book a session'],
     ['/member/bookings.html', 'calendar-week', 'My sessions'],
     ['/member/membership.html', 'credit-card-2-front', 'Membership'],
+    ['/social/', 'chat-heart', 'Social'],
   ],
   trainer: [
     ['/trainer/', 'speedometer2', 'Today'],
     ['/trainer/sessions.html', 'calendar-week', 'Sessions'],
     ['/trainer/availability.html', 'clock', 'Availability'],
     ['/trainer/members.html', 'people', 'My members'],
+    ['/social/', 'chat-heart', 'Social'],
   ],
   admin: [
     ['/admin/', 'speedometer2', 'Dashboard'],
@@ -207,7 +209,7 @@ function renderNav(user) {
   const path = window.location.pathname.replace(/index\.html$/, '');
   const links = NAV[user.role].map(([href, icon, label]) => html`
     <li class="nav-item">
-      <a class="nav-link ${path === href ? 'active' : ''}" href="${href}"><i class="bi bi-${icon} me-1"></i>${label}</a>
+      <a class="nav-link ${path === href || (href === '/social/' && path.startsWith(href)) ? 'active' : ''}" href="${href}"><i class="bi bi-${icon} me-1"></i>${label}</a>
     </li>`);
   const nav = document.createElement('nav');
   nav.className = 'navbar navbar-expand-lg navbar-dark app-nav sticky-top';
@@ -266,7 +268,8 @@ export async function initPage({ role } = {}) {
     window.location.href = `/login.html?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
     return new Promise(() => {});
   }
-  if (role && user.role !== role) {
+  const allowed = Array.isArray(role) ? role : role ? [role] : null;
+  if (allowed && !allowed.includes(user.role)) {
     window.location.href = `/${user.role}/`;
     return new Promise(() => {});
   }

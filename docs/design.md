@@ -17,6 +17,11 @@ The SQL source of truth is in [`db/`](../db). The normalization walkthrough is i
 | Payment | `payments` | Money received (or attempted) for a subscription **or** a training session |
 | Trainer availability | `trainer_availability` | Recurring weekly working hours of a trainer |
 | Booking | `bookings` | A paid 1-on-1 training session between a member and a trainer |
+| Follow | `follows` | Social: who follows whom (one direction, like Instagram) |
+| Post | `posts` | Social: a short text post (≤ 280 characters) |
+| Hashtag | `hashtags`, `post_hashtags` | Social: #tags parsed from posts (M:N), the basis of interests |
+| Like | `post_likes` | Social: one like per person per post |
+| Comment | `post_comments` | Social: replies under a post |
 
 ## 2. Entity-Relationship Diagram
 
@@ -35,6 +40,15 @@ erDiagram
     trainers ||--o{ bookings : "leads"
     users |o--o{ payments : "records"
     users |o--o{ bookings : "cancels"
+    users ||--o{ follows : "follows (follower)"
+    users ||--o{ follows : "is followed (followee)"
+    users ||--o{ posts : "writes"
+    posts ||--o{ post_hashtags : "is tagged"
+    hashtags ||--o{ post_hashtags : "tags"
+    users ||--o{ post_likes : "likes"
+    posts ||--o{ post_likes : "is liked"
+    users ||--o{ post_comments : "replies"
+    posts ||--o{ post_comments : "has replies"
 
     roles {
         tinyint role_id PK
@@ -160,6 +174,8 @@ Conventions: `INT UNSIGNED` surrogate keys, `utf8mb4`, InnoDB, money in whole **
 | user_id | INT UNSIGNED | no | PK, AUTO_INCREMENT | Surrogate key |
 | role_id | TINYINT UNSIGNED | no | FK → roles | Access level |
 | email | VARCHAR(255) | no | UNIQUE, CHECK format | Login name |
+| username | VARCHAR(30) | no | UNIQUE, CHECK `^[a-z0-9][a-z0-9._]{1,28}[a-z0-9]$`, no `..` | Public @handle; also works as a login |
+| social_bio | VARCHAR(160) | yes | | One-line bio on the social profile |
 | password_hash | CHAR(60) | no | | bcrypt hash (never the password) |
 | first_name, last_name | VARCHAR(50) | no | CHECK non-blank | Person's name |
 | phone | VARCHAR(20) | yes | | Contact number |
@@ -282,6 +298,7 @@ Database errors raised by triggers use `SQLSTATE 45000` with a message starting 
 | R10 | Freezes start inside the subscription, never overlap, no booked sessions inside. They extend `end_date` and cannot be edited | `trg_freezes_bi/ai/ad/bu` | admin freeze form |
 | R11 | A trainer's weekly windows never overlap | `trg_availability_bi/bu` | availability editor |
 | R12 | Profiles match the role. Inactive accounts cannot book. Roles of profiled users are fixed | `trg_members_bi`, `trg_trainers_bi`, `trg_users_bu`, procedure | login refuses inactive users |
+| R13 | Social: only active members and trainers follow, post, like or reply. No self-follow. Usernames valid and unique | `assert_social_user` ← `trg_follows_bi`, `trg_posts_bi`, `trg_post_likes_bi`, `trg_post_comments_bi`; `ck_follows_not_self`, `ck_users_username`, `uq_users_username` | `/api/social` is member/trainer-only; live username check |
 
 Automatic behaviour (triggers):
 - A freeze **extends** the subscription's `end_date` by its length. Deleting the freeze gives the days back.
@@ -292,7 +309,7 @@ Automatic behaviour (triggers):
 
 No free users: sign-up (and the desk's "New member") creates the user, the member profile, the subscription and its payment in **one transaction**. A declined card rolls everything back, so every member has a paid membership.
 
-All rules are demonstrated in [`db/06_rule_tests.sql`](../db/06_rule_tests.sql). `npm run db:check-rules` runs it and confirms all 26 rejections.
+All rules are demonstrated in [`db/06_rule_tests.sql`](../db/06_rule_tests.sql). `npm run db:check-rules` runs it and confirms all 30 rejections.
 
 ## 5. Views (derived data)
 
@@ -305,6 +322,9 @@ All rules are demonstrated in [`db/06_rule_tests.sql`](../db/06_rule_tests.sql).
 | `v_trainer_booking_stats` | Trainer bookings report: completed, no-shows, hours delivered, distinct members, PT revenue |
 | `v_monthly_revenue` | Revenue trend per month: memberships, training, total, refunded |
 | `v_member_monthly_usage` | Training sessions per member per month (dashboards) |
+| `v_post_stats` | Like and reply counts per post |
+| `v_user_social_stats` | Profile header counts: posts, followers, following |
+| `v_user_tag_interest` | **What each user likes**: a score per hashtag from their replies (3), likes (2) and own posts (1). Derived, never stored. It drives "Suggested for you" (see the README) |
 
 ## 6. Concurrency
 
@@ -319,3 +339,16 @@ Triggers check overlaps with `SELECT … EXISTS`, which on its own does not stop
    A second request for the same trainer, member or subscription waits. When it continues, the trigger sees the committed first row and rejects the conflict.
 
 `tests/booking.test.js` fires five simultaneous requests for the same slot: exactly one succeeds and four get `409 [R2]`.
+
+## 7. Social area: data model notes
+
+| Table | Key | Notes |
+|---|---|---|
+| `follows` | (follower_id, followee_id) | Composite key: a person follows another at most once. `ck_follows_not_self`. User FKs `RESTRICT` (users are deactivated, never deleted; MySQL also forbids cascading actions on columns a CHECK uses) |
+| `posts` | post_id | `body` ≤ 280 characters, `ck_posts_body` rejects blank posts. Index (author_id, created_at) for profiles and the following feed |
+| `hashtags` | tag_id, UNIQUE name | Stored once, lowercase, without `#` (`ck_hashtags_name`), so a tag is never duplicated (3NF) |
+| `post_hashtags` | (post_id, tag_id) | Associative table for the M:N between posts and hashtags. Deleting a post cascades |
+| `post_likes` | (user_id, post_id) | Composite key = one like per person per post. Counts are derived (`v_post_stats`), never stored |
+| `post_comments` | comment_id | Replies; deleting a post cascades |
+
+Like and follower **counts are not columns**: storing them would duplicate what the rows already say (an update anomaly). They come from views, the same "store facts, derive status" rule used for memberships.

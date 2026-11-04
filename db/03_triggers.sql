@@ -383,3 +383,46 @@ BEGIN
 END $$
 
 DELIMITER ;
+
+-- =====================================================================
+-- Social area: R13, only active members and trainers take part
+-- (no self-follow is the CHECK ck_follows_not_self)
+-- =====================================================================
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS assert_social_user $$
+CREATE PROCEDURE assert_social_user(IN p_user_id INT UNSIGNED)
+BEGIN
+  IF NOT EXISTS (
+      SELECT 1 FROM users u JOIN roles r ON r.role_id = u.role_id
+      WHERE u.user_id = p_user_id AND u.is_active AND r.role_name IN ('member', 'trainer')) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R13] Only active members and trainers can use the social area';
+  END IF;
+END $$
+
+DROP TRIGGER IF EXISTS trg_follows_bi $$
+CREATE TRIGGER trg_follows_bi BEFORE INSERT ON follows FOR EACH ROW
+BEGIN
+  CALL assert_social_user(NEW.follower_id);
+  CALL assert_social_user(NEW.followee_id);
+END $$
+
+DROP TRIGGER IF EXISTS trg_posts_bi $$
+CREATE TRIGGER trg_posts_bi BEFORE INSERT ON posts FOR EACH ROW
+BEGIN
+  CALL assert_social_user(NEW.author_id);
+END $$
+
+DROP TRIGGER IF EXISTS trg_post_likes_bi $$
+CREATE TRIGGER trg_post_likes_bi BEFORE INSERT ON post_likes FOR EACH ROW
+BEGIN
+  CALL assert_social_user(NEW.user_id);
+END $$
+
+DROP TRIGGER IF EXISTS trg_post_comments_bi $$
+CREATE TRIGGER trg_post_comments_bi BEFORE INSERT ON post_comments FOR EACH ROW
+BEGIN
+  CALL assert_social_user(NEW.author_id);
+END $$
+
+DELIMITER ;

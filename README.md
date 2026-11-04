@@ -7,6 +7,7 @@ A web application on a MySQL database. It centralizes gym memberships, trainer a
 - **Members** sign up in three steps (details → membership → online payment, simulated); no account exists without a paid membership. They renew online and book 1-on-1 sessions with any trainer whenever they like, **paid per session**.
 - **Trainers** set their weekly hours, see their schedule and members, and mark sessions completed or no-show.
 - **Admins** (front desk) enroll members (always with a paid plan), manage trainers and their hourly rates, plans, subscriptions, freezes and payments, book sessions on a member's behalf, and view management reports.
+- **Social** (members and trainers): every account has a unique **@username**, checked live at sign-up. In the **Social** tab you post (with #hashtags and @mentions), like and reply, search people by @username, follow them, and open Instagram-style profiles. The feed shows people you follow first, then **Suggested for you**, ranked by what you engage with.
 
 **Memberships are gym access only**: 1 Month ₩70,000 · 3 Months ₩189,000 · 6 Months ₩342,000 · 1 Year ₩600,000. **Personal training is separate**: each session costs the trainer's hourly rate × its length (e.g. ₩60,000/h → a 30-minute session is ₩30,000), paid when booked and refunded automatically when cancelled.
 
@@ -17,7 +18,7 @@ The database is normalized to **3NF (and BCNF)**. Its business rules are enforce
 | Database | MySQL 8+ (developed on MySQL 26.10): tables, views, triggers |
 | Backend | Node.js 24, Express 5, Sequelize 6 (mysql2), express-session (stored in MySQL), bcrypt, zod |
 | Frontend | HTML5, CSS3, vanilla JavaScript modules, Bootstrap 5.3, Bootstrap Icons, Chart.js |
-| Tests | Jest + Supertest (62 tests) |
+| Tests | Jest + Supertest (73 tests) |
 
 | Member: book a session | Admin: dashboard |
 |---|---|
@@ -63,7 +64,7 @@ npm start                        # → http://localhost:3000
 | Member | `yuna.choi@binaryfit.test` | Plan ends within a week, so shows in "Expiring soon" |
 | Member | `ethan.brooks@binaryfit.test` | Membership frozen right now |
 
-The login page lists these accounts. Click one to fill in the form. To try the sign-up, use **Join now** with any new email.
+Usernames are the email's first part (for example `@minji.kim`); you can log in with either. The login page lists these accounts. Click one to fill in the form. To try the sign-up, use **Join now** with any new email.
 
 ---
 
@@ -71,16 +72,16 @@ The login page lists these accounts. Click one to fill in the form. To try the s
 
 | File | Contents |
 |---|---|
-| [`db/01_schema.sql`](db/01_schema.sql) | 10 tables with 15 foreign keys, 20 `CHECK` constraints, indexes |
-| [`db/02_views.sql`](db/02_views.sql) | 7 views: derived subscription status, schedules, report views |
-| [`db/03_triggers.sql`](db/03_triggers.sql) | 17 triggers + 2 helper procedures enforcing rules R1–R12 |
+| [`db/01_schema.sql`](db/01_schema.sql) | 16 tables with 24 foreign keys, 25 `CHECK` constraints, indexes |
+| [`db/02_views.sql`](db/02_views.sql) | 10 views: derived subscription status, schedules, report views, social stats and interests |
+| [`db/03_triggers.sql`](db/03_triggers.sql) | 21 triggers + 3 helper procedures enforcing rules R1–R13 |
 | `db/04_seed.sql` | Generated demo data (≈60 members, 6 trainers, 5 plans, 12 months of history) |
 | [`db/05_reports.sql`](db/05_reports.sql) | Management report queries (the dashboard runs these exact queries) |
 | [`db/06_rule_tests.sql`](db/06_rule_tests.sql) | Live demonstration of every rule, rolled back at the end |
 | [`docs/design.md`](docs/design.md) | ERD, data dictionary, business rules, concurrency |
 | [`docs/normalization.md`](docs/normalization.md) | UNF → 1NF → 2NF → 3NF → BCNF walkthrough |
 
-**Tables:** `roles`, `users`, `members`, `trainers`, `membership_plans`, `subscriptions`, `subscription_freezes`, `payments`, `trainer_availability`, `bookings`.
+**Tables:** `roles`, `users`, `members`, `trainers`, `membership_plans`, `subscriptions`, `subscription_freezes`, `payments`, `trainer_availability`, `bookings`, and for the social area `follows`, `posts`, `hashtags`, `post_hashtags`, `post_likes`, `post_comments`.
 
 ### Business rules
 
@@ -98,8 +99,23 @@ The login page lists these accounts. Click one to fill in the form. To try the s
 | R10 | Freezes: inside the period, no overlap, no booked sessions. Extend the end date | triggers |
 | R11 | A trainer's weekly windows never overlap | trigger |
 | R12 | Profiles match roles. Inactive accounts cannot book | triggers |
+| R13 | Social area: only active members and trainers post, like, reply or follow; nobody follows themselves; usernames are valid and unique | triggers + CHECK + UNIQUE |
 
-Prove them: `npm run db:check-rules` runs `db/06_rule_tests.sql` and shows all **26 rejections**.
+Prove them: `npm run db:check-rules` runs `db/06_rule_tests.sql` and shows all **30 rejections**.
+
+### The social feed algorithm
+
+"Suggested for you" ranks recent posts from people you don't follow (and that you haven't liked yet). Every signal comes from data the database already has:
+
+| Signal | Where it comes from | Weight |
+|---|---|---|
+| Your interest in the post's hashtags | view `v_user_tag_interest`: reply = 3, like = 2, your own post = 1, per hashtag | 2.0 × ln(1 + score) |
+| Authors you liked before | `post_likes` | 1.5 × ln(1 + likes) |
+| People you follow who liked it | `post_likes` ⋈ `follows` | 1.2 each |
+| A trainer you have trained with | `bookings` | + 1.5 |
+| Popularity | likes and replies | 0.8 × ln(1 + likes) + 0.5 × ln(1 + replies) |
+
+The sum is divided by an age penalty, (1 + days old)^0.6, so fresh posts win ties. Each suggestion shows why it's there ("Because you like #yoga", "@soobin liked this", "From your trainer"), and your current interests appear on the left of the feed. "Who to follow" ranks people who follow you, your trainers, friends of friends and people with the same interests. The query is in `src/services/social.js`.
 
 ### MySQL Workbench
 - **ERD:** *Database → Reverse Engineer…* → connection to `127.0.0.1:3306` as `root` → select `gym_db` → Finish. Or use *File → Import → Reverse Engineer MySQL Create Script…* with `db/01_schema.sql`.

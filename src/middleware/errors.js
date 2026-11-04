@@ -14,6 +14,10 @@ const CHECK_MESSAGES = {
   ck_payments_amount: 'Amount must be more than 0',
   ck_payments_paid_at: 'Paid and refunded payments need a payment time',
   ck_payments_target: 'A payment is for either a membership or a training session',
+  ck_users_username: 'Usernames use 3–30 lowercase letters, numbers, periods or underscores',
+  ck_follows_not_self: 'You cannot follow yourself',
+  ck_posts_body: 'Write something first',
+  ck_post_comments_body: 'Write a reply first',
   ck_availability_day: 'Day must be Monday to Sunday',
   ck_availability_times: 'End time must be after start time',
   ck_availability_grid: 'Times must be on the hour or half hour',
@@ -26,6 +30,7 @@ const CHECK_MESSAGES = {
 
 const UNIQUE_MESSAGES = {
   uq_users_email: 'An account with this email already exists',
+  uq_users_username: 'That username is taken',
   uq_plans_name: 'A plan with this name already exists',
   uq_availability_slot: 'You already have a window starting at that time',
 };

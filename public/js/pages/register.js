@@ -2,6 +2,7 @@ import {
   api, html, render, busy, formValues, showFieldErrors, clearFieldErrors, krw, fmtDate, isoDate, $, $$, queryParam,
   paymentComplete,
 } from '../app.js';
+import { wireUsernameCheck, suggestFromName } from '../username-check.js';
 
 // Three steps, one request at the end: the account, the membership and its
 // payment are created together, so nobody joins without a paid plan.
@@ -20,12 +21,29 @@ function show(step) {
 $$('[data-back]').forEach((btn) => btn.addEventListener('click', () => show(Number(btn.dataset.back))));
 
 // ---- Step 1: details (checked by the server before moving on) ----------
+// Live @username check as you type; a first.last suggestion once the name is in.
+const usernameOk = wireUsernameCheck($('#username'), $('#usernameStatus'));
+for (const id of ['#firstName', '#lastName']) {
+  $(id).addEventListener('blur', () => {
+    const input = $('#username');
+    const guess = suggestFromName($('#firstName').value, $('#lastName').value);
+    if (!input.value && guess.length >= 3) {
+      input.value = guess;
+      input.dispatchEvent(new Event('input'));
+    }
+  });
+}
+
 $('#detailsForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = event.target;
   clearFieldErrors(form);
   const details = formValues(form);
   await busy(event.submitter, async () => {
+    if (!(await usernameOk())) {
+      $('#username').focus();
+      return;
+    }
     try {
       await api('/auth/register/check', { method: 'POST', body: details });
       state.details = details;
@@ -78,7 +96,7 @@ $('#toPayment').addEventListener('click', () => {
     <div class="p-3 rounded bg-brand-soft">
       <div class="d-flex justify-content-between"><span>${plan.planName} membership</span><span>${krw(plan.priceKrw)}</span></div>
       <div class="small text-secondary">Gym access ${fmtDate(isoDate(new Date()))} → ${fmtDate(endDateFor(plan.durationMonths))}</div>
-      <div class="small text-secondary">For ${state.details.firstName} ${state.details.lastName} · ${state.details.email}</div>
+      <div class="small text-secondary">For ${state.details.firstName} ${state.details.lastName} (@${state.details.username}) · ${state.details.email}</div>
       <hr><div class="d-flex justify-content-between fw-bold fs-5"><span>To pay now</span><span>${krw(plan.priceKrw)}</span></div>
     </div>`);
   $('#payBtn').innerHTML = `<i class="bi bi-lock-fill me-1"></i>Pay ${krw(plan.priceKrw)} and join`;

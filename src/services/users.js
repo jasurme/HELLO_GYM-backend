@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const { sequelize, User, Member, Trainer, Role, Payment } = require('../models');
 const subscriptions = require('./subscriptions');
+const usernames = require('./usernames');
 const time = require('../lib/time');
 const { notFound } = require('../lib/http-error');
 
@@ -11,11 +12,12 @@ const hashPassword = (password) => bcrypt.hash(password, BCRYPT_COST);
 
 // Creates the login row and, for members/trainers, the profile row in one
 // transaction (trg_members_bi / trg_trainers_bi check the role matches, R12).
-async function createUser({ role, email, password, firstName, lastName, phone, profile = {} }, { transaction } = {}) {
+async function createUser({ role, email, password, firstName, lastName, phone, username, profile = {} }, { transaction } = {}) {
   const passwordHash = await hashPassword(password);
   const create = async (t) => {
+    const handle = username || (await usernames.generate(firstName, lastName, { transaction: t }));
     const user = await User.create({
-      roleId: ROLE_IDS[role], email, passwordHash, firstName, lastName, phone,
+      roleId: ROLE_IDS[role], email, username: handle, passwordHash, firstName, lastName, phone,
     }, { transaction: t });
     if (role === 'member') {
       await Member.create({
@@ -73,8 +75,11 @@ async function updateUser(userId, { account = {}, profile = {} }) {
 // Compared against when the email is unknown, so both cases take the same time.
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', BCRYPT_COST);
 
-async function verifyPassword(email, password) {
-  const user = await User.scope('withPassword').findOne({ where: { email }, include: [Role] });
+// Log in with either the email address or the @username.
+async function verifyPassword(identifier, password) {
+  const login = identifier.trim().toLowerCase().replace(/^@/, '');
+  const where = login.includes('@') ? { email: login } : { username: login };
+  const user = await User.scope('withPassword').findOne({ where, include: [Role] });
   const hash = user?.passwordHash || DUMMY_HASH;
   const ok = await bcrypt.compare(password, hash);
   return ok && user ? user : null;
@@ -98,6 +103,8 @@ async function profile(userId) {
     email: plain.email,
     firstName: plain.firstName,
     lastName: plain.lastName,
+    username: plain.username,
+    socialBio: plain.socialBio,
     phone: plain.phone,
     isActive: plain.isActive,
     createdAt: plain.createdAt,

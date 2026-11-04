@@ -33,10 +33,10 @@ function sessionStore() {
 
 // Server-side guard for the role dashboards: /member/*, /trainer/*, /admin/*
 // pages are only served to logged-in users with that role (R7).
-function pageGuard(role) {
+function pageGuard(...roles) {
   return (req, res, next) => {
     if (!req.user) return res.redirect(`/login.html?next=${encodeURIComponent(req.originalUrl)}`);
-    if (req.user.role !== role) return res.redirect(`/${req.user.role}/`);
+    if (!roles.includes(req.user.role)) return res.redirect(`/${req.user.role}/`);
     return next();
   };
 }
@@ -68,6 +68,7 @@ function createApp() {
   app.use('/api/auth', require('./routes/auth'));
   app.use('/api', require('./routes/public'));
   app.use('/api/member', require('./routes/member'));
+  app.use('/api/social', require('./routes/social'));
   app.use('/api/trainer', require('./routes/trainer'));
   app.use('/api/admin/reports', require('./routes/reports'));
   app.use('/api/admin', require('./routes/admin'));
@@ -78,6 +79,7 @@ function createApp() {
   app.use('/vendor/bootstrap-icons', express.static(path.join(ROOT, 'node_modules/bootstrap-icons/font')));
   app.use('/vendor/chart.js', express.static(path.join(ROOT, 'node_modules/chart.js/dist')));
   for (const role of ['member', 'trainer', 'admin']) app.use(`/${role}`, pageGuard(role));
+  app.use('/social', pageGuard('member', 'trainer'));
   app.use(express.static(path.join(ROOT, 'public'), { extensions: ['html'] }));
 
   app.use(errorHandler);
