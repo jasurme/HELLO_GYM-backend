@@ -414,3 +414,28 @@ export function formModal({ title, body, submitText = 'Save', size = '', onSubmi
   instance.show();
   return { form, el, modal: instance };
 }
+
+// Full-screen "Payment complete" confirmation: an animated green check with
+// the amount and what was bought, then a smooth fade into `redirect`.
+export function paymentComplete({ amount, lines = [], redirect, delay = 2300 }) {
+  const el = document.createElement('div');
+  el.className = 'pay-success';
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
+  render(el, html`<div class="pay-success-card">
+    <svg class="pay-check" viewBox="0 0 52 52" aria-hidden="true">
+      <circle class="pay-check-circle" cx="26" cy="26" r="24"></circle>
+      <path class="pay-check-mark" fill="none" d="M14 27 l8 8 l16 -17"></path>
+    </svg>
+    <h2 class="h4 fw-bold mt-3 mb-1">Payment complete</h2>
+    ${amount != null ? html`<div class="fs-3 fw-bold pay-amount">${krw(amount)}</div>` : ''}
+    ${lines.map((line) => html`<div class="text-secondary">${line}</div>`)}
+    <div class="small text-secondary mt-3"><span class="spinner-grow spinner-grow-sm text-success me-2"></span>Taking you to your dashboard…</div>
+  </div>`);
+  document.body.append(el);
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
+  setTimeout(() => {
+    document.body.classList.add('page-leave');
+    setTimeout(() => { window.location.href = redirect; }, 350);
+  }, delay);
+}

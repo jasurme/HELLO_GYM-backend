@@ -1,6 +1,6 @@
 import {
-  api, initPage, html, render, toast, showError, emptyState, badge, krw, fmtDate, fmtDateTime,
-  busy, modal, queryParam, METHOD_LABELS, $,
+  api, initPage, html, render, showError, emptyState, badge, krw, fmtDate, fmtDateTime,
+  busy, modal, queryParam, paymentComplete, METHOD_LABELS, $,
 } from '../app.js';
 import { membershipCard } from '../components.js';
 
@@ -28,11 +28,10 @@ render('#page', html`
     <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
       <div class="modal-header"><h5 class="modal-title"><i class="bi bi-shield-lock me-2 text-brand"></i>Online checkout</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body">
-        <div class="alert alert-info small py-2"><i class="bi bi-info-circle me-1"></i>Demo checkout: no real card is charged.</div>
         <div id="checkoutSummary"></div>
       </div>
-      <div class="modal-footer justify-content-between">
-        <button class="btn btn-link text-danger px-0" id="declineBtn">Simulate a declined card</button>
+      <div class="modal-footer">
+        <button class="btn btn-light" data-bs-dismiss="modal">Back</button>
         <button class="btn btn-primary" id="payBtn"><i class="bi bi-lock-fill me-1"></i>Pay now</button>
       </div>
     </div></div>
@@ -56,27 +55,30 @@ function openCheckout(target) {
   modal('#checkoutModal').show();
 }
 
-async function pay(simulateFailure, button) {
+async function pay(button) {
   const { plan, sub } = checkout;
   await busy(button, async () => {
     try {
       if (plan) {
         // Buying is one step: the membership exists only once it is paid.
-        await api('/member/subscriptions', { method: 'POST', body: { planId: plan.planId, simulateFailure } });
+        await api('/member/subscriptions', { method: 'POST', body: { planId: plan.planId } });
       } else {
-        await api(`/member/subscriptions/${sub.subscriptionId}/checkout`, { method: 'POST', body: { simulateFailure } });
+        await api(`/member/subscriptions/${sub.subscriptionId}/checkout`, { method: 'POST', body: {} });
       }
       modal('#checkoutModal').hide();
-      toast(`Payment received. Your ${(plan || sub).planName} membership is ready.`);
+      paymentComplete({
+        amount: plan ? plan.priceKrw : sub.balanceKrw,
+        lines: [`Your ${(plan || sub).planName} membership is paid.`],
+        redirect: '/member/',
+      });
     } catch (err) {
       modal('#checkoutModal').hide();
       showError(err);
+      await load();
     }
-    await load();
   });
 }
-$('#payBtn').addEventListener('click', (e) => pay(false, e.currentTarget));
-$('#declineBtn').addEventListener('click', (e) => pay(true, e.currentTarget));
+$('#payBtn').addEventListener('click', (e) => pay(e.currentTarget));
 
 let plans = [];
 let subs = [];

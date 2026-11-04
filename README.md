@@ -63,7 +63,7 @@ npm start                        # → http://localhost:3000
 | Member | `yuna.choi@binaryfit.test` | Plan ends within a week, so shows in "Expiring soon" |
 | Member | `ethan.brooks@binaryfit.test` | Membership frozen right now |
 
-The login page lists these accounts. Click one to fill in the form. To try the sign-up, use **Join now** with any new email; the demo checkout also has a "Simulate a declined card" button.
+The login page lists these accounts. Click one to fill in the form. To try the sign-up, use **Join now** with any new email.
 
 ---
 

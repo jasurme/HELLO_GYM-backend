@@ -1,5 +1,6 @@
 import {
   api, html, render, busy, formValues, showFieldErrors, clearFieldErrors, krw, fmtDate, isoDate, $, $$, queryParam,
+  paymentComplete,
 } from '../app.js';
 
 // Three steps, one request at the end: the account, the membership and its
@@ -86,13 +87,18 @@ $('#toPayment').addEventListener('click', () => {
 });
 
 // ---- Step 3: pay and create the account ---------------------------------
-async function pay(simulateFailure, button) {
+async function pay(button) {
   const error = $('#payError');
   error.classList.add('d-none');
+  const plan = state.plans.find((p) => p.planId === state.planId);
   await busy(button, async () => {
     try {
-      await api('/auth/register', { method: 'POST', body: { ...state.details, planId: state.planId, simulateFailure } });
-      window.location.href = '/member/?welcome=1';
+      await api('/auth/register', { method: 'POST', body: { ...state.details, planId: state.planId } });
+      paymentComplete({
+        amount: plan.priceKrw,
+        lines: [`Welcome to BinaryFit, ${state.details.firstName}!`, `Your ${plan.planName} membership is active.`],
+        redirect: '/member/?welcome=1',
+      });
     } catch (err) {
       if (err.fields?.email) {
         show(1);
@@ -104,8 +110,7 @@ async function pay(simulateFailure, button) {
     }
   });
 }
-$('#payBtn').addEventListener('click', (e) => pay(false, e.currentTarget));
-$('#declineBtn').addEventListener('click', (e) => pay(true, e.currentTarget));
+$('#payBtn').addEventListener('click', (e) => pay(e.currentTarget));
 
 state.plans = await api('/plans');
 if (!state.plans.some((p) => p.planId === state.planId)) state.planId = state.plans[0]?.planId ?? null;

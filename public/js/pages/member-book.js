@@ -1,6 +1,6 @@
 import {
-  api, initPage, html, render, toast, showError, avatar, emptyState, fmtDate, fmtRange, isoDate, todayIso,
-  busy, modal, queryParam, krw, $, $$,
+  api, initPage, html, render, showError, avatar, emptyState, fmtDate, fmtRange, isoDate, todayIso,
+  busy, modal, queryParam, krw, paymentComplete, $, $$,
 } from '../app.js';
 
 await initPage({ role: 'member' });
@@ -28,15 +28,22 @@ render('#page', html`
   <div class="row g-4">
     <div class="col-lg-4">
       <div class="card">
-        <div class="card-header">1. Trainer</div>
-        <div class="list-group list-group-flush" id="trainerPick">
+        <div class="card-header d-flex flex-column gap-2">
+          <span>1. Trainer</span>
+          <div class="input-group input-group-sm">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="search" class="form-control" id="trainerSearch" placeholder="Search by name" aria-label="Search trainers by name">
+          </div>
+        </div>
+        <div class="list-group list-group-flush trainer-list" id="trainerPick">
           ${trainers.map((t) => html`
-            <button type="button" class="list-group-item list-group-item-action d-flex gap-3 align-items-center py-3 trainer-option" data-trainer="${t.trainerId}">
+            <button type="button" class="list-group-item list-group-item-action d-flex gap-3 align-items-center py-3 trainer-option" data-trainer="${t.trainerId}" data-name="${t.name.toLowerCase()}">
               ${avatar(t.name, t.trainerId)}
               <span class="lh-sm text-start"><span class="fw-semibold d-block">${t.name}</span>
                 <span class="small text-brand">${t.specialization}</span><br>
                 <span class="small text-secondary">${krw(t.hourlyRateKrw)}/hour · ${[...new Set(t.hours.map((h) => h.dayName.slice(0, 3)))].join(' · ')}</span></span>
             </button>`)}
+          <div class="empty-state d-none" id="noTrainer"><i class="bi bi-person-x"></i>No trainer with that name.</div>
         </div>
       </div>
     </div>
@@ -81,10 +88,9 @@ render('#page', html`
         <label class="form-label" for="memberNote">Note for the trainer <span class="text-secondary small">(optional)</span></label>
         <textarea class="form-control" id="memberNote" rows="2" maxlength="255" placeholder="e.g. focus on lower back"></textarea>
         <div class="form-text">Cancel online up to 12 hours before and you get a full refund.</div>
-        <div class="alert alert-info small py-2 mt-3 mb-0"><i class="bi bi-info-circle me-1"></i>Demo checkout: no real card is charged.</div>
       </div>
-      <div class="modal-footer justify-content-between">
-        <button class="btn btn-link text-danger px-0" id="declineBtn">Simulate a declined card</button>
+      <div class="modal-footer">
+        <button class="btn btn-light" data-bs-dismiss="modal">Back</button>
         <button class="btn btn-primary" id="bookBtn"><i class="bi bi-lock-fill me-1"></i>Pay and book</button>
       </div>
     </div></div>
@@ -130,6 +136,18 @@ async function loadSlots() {
   }
 }
 
+// Filter the trainer list by name as you type.
+$('#trainerSearch').addEventListener('input', (event) => {
+  const query = event.target.value.trim().toLowerCase();
+  let shown = 0;
+  $$('.trainer-option').forEach((el) => {
+    const match = el.dataset.name.includes(query);
+    el.classList.toggle('d-none', !match);
+    if (match) shown++;
+  });
+  $('#noTrainer').classList.toggle('d-none', shown > 0);
+});
+
 $('#trainerPick').addEventListener('click', (event) => {
   const btn = event.target.closest('[data-trainer]');
   if (!btn) return;
@@ -172,7 +190,7 @@ $('#slots').addEventListener('click', (event) => {
   modal('#confirmModal').show();
 });
 
-async function book(simulateFailure, button) {
+async function book(button) {
   await busy(button, async () => {
     try {
       const s = await api('/member/bookings', {
@@ -182,12 +200,14 @@ async function book(simulateFailure, button) {
           startsAt: `${state.date} ${state.slot}`,
           duration: state.duration,
           memberNote: $('#memberNote').value.trim() || null,
-          simulateFailure,
         },
       });
       modal('#confirmModal').hide();
-      toast(`Paid ${krw(s.priceKrw)} and booked ${fmtRange(s.startsAt, s.endsAt)} with ${s.trainerName}`);
-      await loadSlots();
+      paymentComplete({
+        amount: s.priceKrw,
+        lines: ['Your session is booked:', `${fmtRange(s.startsAt, s.endsAt)} with ${s.trainerName}`],
+        redirect: '/member/',
+      });
     } catch (err) {
       modal('#confirmModal').hide();
       showError(err);
@@ -195,7 +215,6 @@ async function book(simulateFailure, button) {
     }
   });
 }
-$('#bookBtn').addEventListener('click', (e) => book(false, e.currentTarget));
-$('#declineBtn').addEventListener('click', (e) => book(true, e.currentTarget));
+$('#bookBtn').addEventListener('click', (e) => book(e.currentTarget));
 
 await loadSlots();
