@@ -2,6 +2,7 @@ import {
   api, initPage, html, render, badge, fmtDate, krw, emptyState, formModal, toast, queryParam, $,
 } from '../app.js';
 import { personCell } from '../components.js';
+import { deskPaymentFields } from '../admin-common.js';
 
 await initPage({ role: 'admin' });
 
@@ -56,10 +57,13 @@ $('#table').addEventListener('click', (event) => {
   if (row) window.location.href = row.dataset.href;
 });
 
-function newMember() {
+// No free members: a new member is enrolled with a plan, paid at the desk.
+async function newMember() {
+  const plans = await api('/plans');
   formModal({
     title: 'New member',
-    submitText: 'Create member',
+    submitText: 'Take payment and create member',
+    size: 'modal-lg',
     body: html`<div class="row g-3">
       <div class="col-sm-6"><label class="form-label">First name</label><input class="form-control" name="firstName" required></div>
       <div class="col-sm-6"><label class="form-label">Last name</label><input class="form-control" name="lastName" required></div>
@@ -70,10 +74,17 @@ function newMember() {
         <div class="form-text">The member can change it after logging in.</div></div>
       <div class="col-sm-6"><label class="form-label">Emergency contact</label><input class="form-control" name="emergencyContactName"></div>
       <div class="col-sm-6"><label class="form-label">Emergency phone</label><input class="form-control" name="emergencyContactPhone" type="tel"></div>
+      <div class="col-12"><hr class="my-1"><h6 class="fw-bold mt-2 mb-0">Membership (starts today)</h6></div>
+      <div class="col-12"><label class="form-label">Plan</label><select class="form-select" name="planId">
+        ${plans.map((p) => html`<option value="${p.planId}">${p.planName} · ${krw(p.priceKrw)}</option>`)}</select></div>
+      ${deskPaymentFields()}
     </div>`,
-    onSubmit: async (values) => {
-      const member = await api('/admin/members', { method: 'POST', body: values });
-      toast(`${member.firstName} ${member.lastName} was added`);
+    onSubmit: async ({ planId, method, reference, ...person }) => {
+      const member = await api('/admin/members', {
+        method: 'POST',
+        body: { ...person, planId: Number(planId), payment: { method, reference } },
+      });
+      toast(`${member.firstName} ${member.lastName} joined and paid`);
       window.location.href = `/admin/member.html?id=${member.userId}`;
     },
   });

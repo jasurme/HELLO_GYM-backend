@@ -1,8 +1,12 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const { User } = require('../models');
 const users = require('../services/users');
+const subscriptions = require('../services/subscriptions');
 const { requireAuth } = require('../middleware/auth');
-const { badRequest, unauthorized, forbidden } = require('../lib/http-error');
+const {
+  badRequest, unauthorized, forbidden, conflict,
+} = require('../lib/http-error');
 const v = require('../lib/validate');
 const env = require('../config/env');
 
@@ -28,7 +32,7 @@ function logIn(req, user) {
   });
 }
 
-const registerSchema = v.z.object({
+const detailsSchema = v.z.object({
   email: v.email,
   password: v.password,
   firstName: v.name,
@@ -37,10 +41,32 @@ const registerSchema = v.z.object({
   dateOfBirth: v.optionalDate,
 });
 
+async function checkDetails(body) {
+  const details = v.validate(detailsSchema, body);
+  if (await User.findOne({ where: { email: details.email } })) {
+    throw conflict('An account with this email already exists', { fields: { email: 'This email is already registered' } });
+  }
+  return details;
+}
+
+// Sign-up step 1 (details) is checked before the member picks a plan.
+router.post('/register/check', loginLimiter, async (req, res) => {
+  await checkDetails(req.body);
+  res.status(204).end();
+});
+
+// Final step: details + plan + online payment. There are no free accounts:
+// the account only exists once the membership is paid (one transaction).
 router.post('/register', loginLimiter, async (req, res) => {
-  const data = v.validate(registerSchema, req.body);
-  const userId = await users.createUser({
-    role: 'member', ...data, profile: { dateOfBirth: data.dateOfBirth },
+  const person = await checkDetails(req.body);
+  const { planId, simulateFailure } = v.validate(v.z.object({
+    planId: v.id,
+    simulateFailure: v.z.boolean().optional(),
+  }), req.body);
+  const userId = await users.createMemberWithPlan({
+    person,
+    planId,
+    charge: () => subscriptions.chargeOnline({ simulateFailure }),
   });
   await logIn(req, { userId });
   res.status(201).json(await users.profile(userId));

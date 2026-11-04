@@ -20,7 +20,6 @@ SELECT
   u.email                                      AS member_email,
   s.plan_id,
   p.plan_name,
-  p.sessions_per_month,
   s.start_date,
   s.end_date,
   s.price_krw,
@@ -43,7 +42,7 @@ JOIN membership_plans p ON p.plan_id = s.plan_id
 LEFT JOIN (
   SELECT subscription_id, SUM(amount_krw) AS paid_krw
   FROM payments
-  WHERE status = 'paid'
+  WHERE status = 'paid' AND subscription_id IS NOT NULL
   GROUP BY subscription_id
 ) pay ON pay.subscription_id = s.subscription_id
 LEFT JOIN (
@@ -86,7 +85,8 @@ WHERE v.status IN ('active', 'frozen')
   AND v.end_date <= CURDATE() + INTERVAL 30 DAY;
 
 -- ---------------------------------------------------------------------
--- v_trainer_schedule: bookings with names, for calendars and lists
+-- v_trainer_schedule: bookings with names, price and payment state,
+-- for calendars and lists
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE VIEW v_trainer_schedule AS
 SELECT
@@ -101,6 +101,10 @@ SELECT
   b.ends_at,
   TIMESTAMPDIFF(MINUTE, b.starts_at, b.ends_at) AS duration_min,
   b.status,
+  b.price_krw,
+  (SELECT p.status FROM payments p
+   WHERE p.booking_id = b.booking_id
+   ORDER BY p.payment_id DESC LIMIT 1)         AS payment_status,
   b.member_note,
   b.trainer_note,
   b.cancelled_at
@@ -109,7 +113,7 @@ JOIN users tu ON tu.user_id = b.trainer_id
 JOIN users mu ON mu.user_id = b.member_id;
 
 -- ---------------------------------------------------------------------
--- v_trainer_booking_stats: lifetime booking totals per trainer
+-- v_trainer_booking_stats: lifetime booking totals and PT revenue per trainer
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE VIEW v_trainer_booking_stats AS
 SELECT
@@ -125,19 +129,25 @@ SELECT
                           THEN TIMESTAMPDIFF(MINUTE, b.starts_at, b.ends_at) END) / 60, 1), 0)
                                                                 AS hours_delivered,
   COUNT(DISTINCT CASE WHEN b.status <> 'cancelled' THEN b.member_id END)
-                                                                AS distinct_members
+                                                                AS distinct_members,
+  (SELECT COALESCE(SUM(p.amount_krw), 0)
+   FROM payments p JOIN bookings pb ON pb.booking_id = p.booking_id
+   WHERE pb.trainer_id = t.trainer_id AND p.status = 'paid')    AS revenue_krw
 FROM trainers t
 JOIN users u          ON u.user_id = t.trainer_id
 LEFT JOIN bookings b  ON b.trainer_id = t.trainer_id
 GROUP BY t.trainer_id, u.first_name, u.last_name, t.specialization;
 
 -- ---------------------------------------------------------------------
--- v_monthly_revenue: collected (paid) and refunded money per month
+-- v_monthly_revenue: collected (paid) and refunded money per month,
+-- split into memberships and personal-training sessions
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE VIEW v_monthly_revenue AS
 SELECT
   DATE_FORMAT(paid_at, '%Y-%m')                                AS month,
   SUM(status = 'paid')                                         AS payments,
+  SUM(CASE WHEN status = 'paid' AND subscription_id IS NOT NULL THEN amount_krw ELSE 0 END) AS membership_krw,
+  SUM(CASE WHEN status = 'paid' AND booking_id IS NOT NULL      THEN amount_krw ELSE 0 END) AS training_krw,
   SUM(CASE WHEN status = 'paid'     THEN amount_krw ELSE 0 END) AS revenue_krw,
   SUM(CASE WHEN status = 'refunded' THEN amount_krw ELSE 0 END) AS refunded_krw
 FROM payments
@@ -145,8 +155,8 @@ WHERE paid_at IS NOT NULL
 GROUP BY DATE_FORMAT(paid_at, '%Y-%m');
 
 -- ---------------------------------------------------------------------
--- v_member_monthly_usage: personal-training sessions used per month
--- (cancelled sessions do not count toward the quota)
+-- v_member_monthly_usage: personal-training sessions per member per month
+-- (cancelled sessions not counted)
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE VIEW v_member_monthly_usage AS
 SELECT

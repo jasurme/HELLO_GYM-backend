@@ -8,6 +8,13 @@ export const CANCEL_NOTICE_HOURS = 12;
 
 const hoursUntil = (value) => (parseLocal(value) - new Date()) / 3600000;
 
+// " · ₩60,000 paid" / " · ₩60,000 refunded" next to a session's time.
+function priceText(s) {
+  if (s.priceKrw === undefined || s.priceKrw === null) return '';
+  const state = { paid: 'paid', refunded: 'refunded', pending: 'unpaid', failed: 'unpaid' }[s.paymentStatus];
+  return ` · ${krw(s.priceKrw)}${state ? ` ${state}` : ''}`;
+}
+
 // One training session as a list row. `viewer` decides which name is shown
 // and which actions are offered: member | trainer | admin.
 export function sessionItem(s, { viewer = 'member', actions = true } = {}) {
@@ -37,7 +44,7 @@ export function sessionItem(s, { viewer = 'member', actions = true } = {}) {
       ${dateChip(s.startsAt)}
       <div class="flex-grow-1 min-w-0">
         <div class="fw-semibold">${fmtTime(s.startsAt)}–${fmtTime(s.endsAt)}
-          <span class="text-secondary fw-normal small ms-1">${s.durationMin} min · ${relativeDay(s.startsAt)}</span></div>
+          <span class="text-secondary fw-normal small ms-1">${s.durationMin} min · ${relativeDay(s.startsAt)}${priceText(s)}</span></div>
         <div class="small">${other}</div>
         ${s.memberNote ? html`<div class="small text-secondary"><i class="bi bi-chat-left-text me-1"></i>${s.memberNote}</div>` : ''}
         ${s.trainerNote ? html`<div class="small text-success-emphasis"><i class="bi bi-journal-check me-1"></i>${s.trainerNote}</div>` : ''}
@@ -53,17 +60,16 @@ export function sessionList(sessions, options) {
   return html`<div class="list-group list-group-flush">${sessions.map((s) => sessionItem(s, options))}</div>`;
 }
 
-// Gradient card summarising a member's current subscription.
-export function membershipCard({ current, next, usage }, { actions = '' } = {}) {
+// Gradient card summarising a member's current gym membership.
+export function membershipCard({ current, next, sessionsThisMonth = 0 }, { actions = '' } = {}) {
   if (!current) {
     return html`<div class="card membership-card h-100"><div class="card-body p-4">
       <div class="text-muted-light small text-uppercase fw-semibold mb-2">Membership</div>
       <h3 class="fw-bold">No active membership</h3>
-      <p class="text-muted-light">Choose a plan to start training${next ? html` (your ${next.planName} plan starts ${fmtDate(next.startDate)})` : ''}.</p>
+      <p class="text-muted-light">Renew to use the gym and book trainers${next ? html` (your ${next.planName} plan starts ${fmtDate(next.startDate)})` : ''}.</p>
       ${actions}
     </div></div>`;
   }
-  const pct = usage && usage.quota ? Math.min(100, Math.round((usage.used / usage.quota) * 100)) : 0;
   return html`<div class="card membership-card h-100"><div class="card-body p-4">
     <div class="d-flex justify-content-between align-items-start mb-2">
       <span class="text-muted-light small text-uppercase fw-semibold">Membership</span>
@@ -76,10 +82,9 @@ export function membershipCard({ current, next, usage }, { actions = '' } = {}) 
       <div class="col-6"><div class="fs-3 fw-bold">${current.balanceKrw > 0 ? krw(current.balanceKrw) : 'Paid'}</div>
         <div class="small text-muted-light">${current.balanceKrw > 0 ? 'to pay' : krw(current.priceKrw)}</div></div>
     </div>
-    ${current.sessionsPerMonth > 0 && usage ? html`
-      <div class="d-flex justify-content-between small mb-1"><span>PT sessions this month</span><span>${usage.used} / ${usage.quota}</span></div>
-      <div class="progress mb-3"><div class="progress-bar" style="width:${pct}%"></div></div>`
-    : html`<div class="small text-muted-light mb-3"><i class="bi bi-info-circle me-1"></i>This plan has no personal-training sessions.</div>`}
+    <div class="small text-muted-light mb-3"><i class="bi bi-person-badge me-1"></i>${sessionsThisMonth
+    ? `${sessionsThisMonth} training session${sessionsThisMonth === 1 ? '' : 's'} this month`
+    : 'No training sessions this month'} · trainers are paid per session</div>
     ${next ? html`<div class="small text-muted-light mb-3"><i class="bi bi-arrow-repeat me-1"></i>Next: ${next.planName} from ${fmtDate(next.startDate)} (${next.status.replace('_', ' ')})</div>` : ''}
     ${actions}
   </div></div>`;
@@ -95,7 +100,7 @@ export async function markSession(bookingId, status, { onDone } = {}) {
   const label = status === 'completed' ? 'completed' : 'a no-show';
   const result = await confirmDialog({
     title: `Mark session as ${label}?`,
-    body: status === 'completed' ? 'Add a short note for the member (optional).' : 'The session still counts toward the member\'s monthly quota.',
+    body: status === 'completed' ? 'Add a short note for the member (optional).' : 'The session stays paid; no refund for a no-show.',
     confirmText: status === 'completed' ? 'Mark completed' : 'Mark no-show',
     variant: status === 'completed' ? 'success' : 'warning',
     extra: html`<textarea class="form-control mt-3" id="markNote" rows="2" maxlength="255" placeholder="e.g. Great form on squats"></textarea>`,

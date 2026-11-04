@@ -6,9 +6,9 @@ The problem statement says gyms keep membership, scheduling and payment data in 
 
 One row per member, with **repeating groups** for payments and sessions:
 
-| member_email | member_name | phone | plan | plan_price | months | pt_quota | sub_start | sub_end | sub_price | payments | sessions |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| minji.kim@… | Minji Kim | 010-… | Premium Half-Year | 1,590,000 | 6 | 8 | 2026-09-24 | 2027-03-23 | 1,590,000 | `card 1,590,000 2026-09-24 paid` | `11-07 11:30 Daniel Park (Strength), booked; 11-12 16:30 Hyun-woo Choi (Boxing), booked; …` |
+| member_email | member_name | phone | plan | plan_price | months | sub_start | sub_end | sub_price | payments | sessions |
+|---|---|---|---|---|---|---|---|---|---|---|
+| minji.kim@… | Minji Kim | 010-… | 6 Months | 342,000 | 6 | 2026-09-25 | 2027-03-24 | 342,000 | `card 342,000 2026-09-25 paid; online 60,000 2026-11-01 paid; …` | `11-07 11:30 Daniel Park (Strength, ₩60,000/h) ₩60,000 booked; 11-12 16:30 Hyun-woo Choi (Boxing, ₩55,000/h) ₩55,000 booked; …` |
 
 Problems:
 - **Repeating groups / non-atomic cells** (`payments`, `sessions`), so you can't query "sessions with Daniel next week".
@@ -23,9 +23,9 @@ Rule: atomic values, no repeating groups, and every relation has a key.
 Split the repeating groups into their own relations. Each row now holds one fact:
 
 ```
-SUBSCRIPTION_1NF (member_email, sub_start, member_name, phone, plan, plan_price, months, pt_quota, sub_end, sub_price)
+SUBSCRIPTION_1NF (member_email, sub_start, member_name, phone, plan, plan_price, months, sub_end, sub_price)
 PAYMENT_1NF      (payment_ref, member_email, sub_start, amount, paid_at, method, status)
-SESSION_1NF      (member_email, session_start, session_end, member_name, trainer_email, trainer_name, specialization, status)
+SESSION_1NF      (member_email, session_start, session_end, session_price, member_name, trainer_email, trainer_name, specialization, hourly_rate, status)
 ```
 
 Functional dependencies (FDs) we can now see:
@@ -33,8 +33,8 @@ Functional dependencies (FDs) we can now see:
 | FD | Meaning |
 |---|---|
 | member_email → member_name, phone | a person's details |
-| plan → plan_price, months, pt_quota | catalogue data |
-| trainer_email → trainer_name, specialization | trainer details |
+| plan → plan_price, months | catalogue data |
+| trainer_email → trainer_name, specialization, hourly_rate | trainer details |
 | (member_email, sub_start) → plan, sub_end, sub_price | one subscription |
 | (member_email, session_start) → session_end, trainer_email, status | one session |
 
@@ -48,25 +48,25 @@ Move those attributes out:
 
 ```
 MEMBER        (member_email, member_name, phone)
-SUBSCRIPTION  (member_email, sub_start, plan, plan_price, months, pt_quota, sub_end, sub_price)
+SUBSCRIPTION  (member_email, sub_start, plan, plan_price, months, sub_end, sub_price)
 PAYMENT       (payment_ref, member_email, sub_start, amount, paid_at, method, status)
-SESSION       (member_email, session_start, session_end, trainer_email, trainer_name, specialization, status)
+SESSION       (member_email, session_start, session_end, session_price, trainer_email, trainer_name, specialization, hourly_rate, status)
 ```
 
 ## Step 3: Third Normal Form (3NF)
 
 Rule: 2NF, and no non-key attribute depends on another non-key attribute (**transitive dependency**).
 
-- `SUBSCRIPTION`: key → `plan` → `plan_price, months, pt_quota`. Plan details move to **PLAN**.
+- `SUBSCRIPTION`: key → `plan` → `plan_price, months`. Plan details move to **PLAN**.
 - `SESSION`: key → `trainer_email` → `trainer_name, specialization`. Trainer details move to **TRAINER**.
 
 ```
 MEMBER        (member_email, member_name, phone)
-TRAINER       (trainer_email, trainer_name, specialization)
-PLAN          (plan, plan_price, months, pt_quota)
+TRAINER       (trainer_email, trainer_name, specialization, hourly_rate)
+PLAN          (plan, plan_price, months)
 SUBSCRIPTION  (member_email, sub_start, plan → PLAN, sub_end, sub_price)
-PAYMENT       (payment_ref, (member_email, sub_start) → SUBSCRIPTION, amount, paid_at, method, status)
-SESSION       (member_email, session_start, trainer_email → TRAINER, session_end, status)
+PAYMENT       (payment_ref, (member_email, sub_start) → SUBSCRIPTION  or  (member_email, session_start) → SESSION, amount, paid_at, method, status)
+SESSION       (member_email, session_start, trainer_email → TRAINER, session_end, session_price, status)
 AVAILABILITY  (trainer_email, day_of_week, start_time, end_time)
 ```
 
@@ -86,6 +86,8 @@ These refinements keep 3NF and make the design practical:
 | `subscriptions.price_krw` alongside `membership_plans.price_krw` | The plan holds the **current** list price. The subscription holds the price **agreed at the time of sale**, including discounts. They are different facts: when the plan price changes, old subscriptions must keep their price. `subscription → price` holds, but `plan → subscription price` does not. |
 | `subscriptions.end_date` | It is not determined by `start_date + plan.duration`: freezes extend it and admins may adjust it. It is the contractual end date, a fact of the sale. Each extension is recorded in `subscription_freezes`. |
 | `bookings.ends_at` | Sessions last 30, 60 or 90 minutes, so the end time is not derivable from the start time. |
+| `bookings.price_krw` next to `trainers.hourly_rate_krw` | The trainer holds the **current** rate; the booking holds the price **agreed when it was booked** (a trigger computes it from the rate, the desk may give a different price). When a trainer's rate changes, past and already-booked sessions keep their price. |
+| `payments.subscription_id` **or** `payments.booking_id` | One payments table for both kinds of purchase (an *exclusive arc*): `CHECK ((subscription_id IS NULL) <> (booking_id IS NULL))` makes every payment belong to exactly one thing. Each attribute still depends only on `payment_id`, and revenue reports need one table, not two. |
 | No `subscription_id` on `bookings` | It *would* be redundant: R6 guarantees subscriptions never overlap, so `(member_id, DATE(starts_at))` already determines the covering subscription. Storing it would add a transitive dependency. |
 | No `status` column on `subscriptions` | Active / expired / upcoming / frozen / pending-payment all follow from the dates, the payments, the freezes and today's date. A stored status would go stale every midnight (an update anomaly). It is computed in the view `v_subscription_status`. Only `cancelled_at`, a real event, is stored. |
 | Names shown with bookings | They are joined from `users` in views (`v_trainer_schedule`), never copied. |

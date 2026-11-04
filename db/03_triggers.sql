@@ -13,8 +13,8 @@
 DELIMITER $$
 
 -- ---------------------------------------------------------------------
--- assert_booking_rules: R12, R1, R5, R4, R2, R3 for a live session,
--- in that order so the most fundamental problem is reported first
+-- assert_booking_rules: R12, R1, R4, R2, R3 for a live session, in that
+-- order so the most fundamental problem is reported first
 -- ---------------------------------------------------------------------
 DROP PROCEDURE IF EXISTS assert_booking_rules $$
 CREATE PROCEDURE assert_booking_rules(
@@ -24,10 +24,6 @@ CREATE PROCEDURE assert_booking_rules(
   IN p_starts_at  DATETIME,
   IN p_ends_at    DATETIME)
 BEGIN
-  DECLARE v_quota       INT;
-  DECLARE v_used        INT;
-  DECLARE v_month_start DATETIME;
-
   -- R12: both accounts must be active
   IF NOT EXISTS (SELECT 1 FROM users WHERE user_id = p_member_id AND is_active) THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R12] The member account is inactive';
@@ -36,44 +32,21 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R12] The trainer account is inactive';
   END IF;
 
-  -- R1: a fully paid, non-cancelled, non-frozen subscription must cover
-  -- the session date. Its plan supplies the monthly quota for R5.
-  SET v_quota = (
-    SELECT p.sessions_per_month
-    FROM subscriptions s
-    JOIN membership_plans p ON p.plan_id = s.plan_id
-    WHERE s.member_id = p_member_id
-      AND s.cancelled_at IS NULL
-      AND DATE(p_starts_at) BETWEEN s.start_date AND s.end_date
-      AND (SELECT COALESCE(SUM(pay.amount_krw), 0)
-           FROM payments pay
-           WHERE pay.subscription_id = s.subscription_id AND pay.status = 'paid') >= s.price_krw
-      AND NOT EXISTS (
-           SELECT 1 FROM subscription_freezes f
-           WHERE f.subscription_id = s.subscription_id
-             AND DATE(p_starts_at) BETWEEN f.freeze_start AND f.freeze_end)
-    LIMIT 1);
-
-  IF v_quota IS NULL THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R1] The member has no active, paid subscription on the session date';
-  END IF;
-
-  -- R5: monthly personal-training quota (calendar month of the session)
-  IF v_quota = 0 THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R5] The member''s plan does not include personal training';
-  END IF;
-
-  SET v_month_start = DATE_FORMAT(p_starts_at, '%Y-%m-01');
-  SET v_used = (
-    SELECT COUNT(*) FROM bookings b
-    WHERE b.member_id = p_member_id
-      AND b.status <> 'cancelled'
-      AND (p_booking_id IS NULL OR b.booking_id <> p_booking_id)
-      AND b.starts_at >= v_month_start
-      AND b.starts_at <  v_month_start + INTERVAL 1 MONTH);
-
-  IF v_used >= v_quota THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R5] The member has used all personal-training sessions for this month';
+  -- R1: training happens in the gym, so a fully paid, non-cancelled,
+  -- non-frozen membership must cover the session date.
+  IF NOT EXISTS (
+      SELECT 1 FROM subscriptions s
+      WHERE s.member_id = p_member_id
+        AND s.cancelled_at IS NULL
+        AND DATE(p_starts_at) BETWEEN s.start_date AND s.end_date
+        AND (SELECT COALESCE(SUM(pay.amount_krw), 0)
+             FROM payments pay
+             WHERE pay.subscription_id = s.subscription_id AND pay.status = 'paid') >= s.price_krw
+        AND NOT EXISTS (
+             SELECT 1 FROM subscription_freezes f
+             WHERE f.subscription_id = s.subscription_id
+               AND DATE(p_starts_at) BETWEEN f.freeze_start AND f.freeze_end)) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R1] The member has no active, paid membership on the session date';
   END IF;
 
   -- R4: the whole session must fit inside one of the trainer's weekly windows
@@ -110,27 +83,34 @@ BEGIN
 END $$
 
 -- ---------------------------------------------------------------------
--- assert_payment_within_price: R9, live payments never exceed the price
+-- assert_payment_within_price: R9, live payments for a membership or a
+-- training session never exceed the price agreed for it
 -- ---------------------------------------------------------------------
 DROP PROCEDURE IF EXISTS assert_payment_within_price $$
 CREATE PROCEDURE assert_payment_within_price(
   IN p_payment_id      INT UNSIGNED,   -- NULL for a new payment
-  IN p_subscription_id INT UNSIGNED,
+  IN p_subscription_id INT UNSIGNED,   -- exactly one of these two is set
+  IN p_booking_id      INT UNSIGNED,   -- (ck_payments_target)
   IN p_amount_krw      INT UNSIGNED,
   IN p_status          VARCHAR(10))
 BEGIN
   DECLARE v_price INT UNSIGNED;
   DECLARE v_other BIGINT;
 
-  IF p_status IN ('pending', 'paid') THEN
-    SET v_price = (SELECT price_krw FROM subscriptions WHERE subscription_id = p_subscription_id);
+  -- A row with both or neither target is left to ck_payments_target.
+  IF p_status IN ('pending', 'paid') AND (p_subscription_id IS NULL) <> (p_booking_id IS NULL) THEN
+    IF p_subscription_id IS NOT NULL THEN
+      SET v_price = (SELECT price_krw FROM subscriptions WHERE subscription_id = p_subscription_id);
+    ELSE
+      SET v_price = (SELECT price_krw FROM bookings WHERE booking_id = p_booking_id);
+    END IF;
     SET v_other = (
       SELECT COALESCE(SUM(amount_krw), 0) FROM payments
-      WHERE subscription_id = p_subscription_id
-        AND status IN ('pending', 'paid')
-        AND (p_payment_id IS NULL OR payment_id <> p_payment_id));
+      WHERE status IN ('pending', 'paid')
+        AND (p_payment_id IS NULL OR payment_id <> p_payment_id)
+        AND (subscription_id = p_subscription_id OR booking_id = p_booking_id));
     IF v_price IS NOT NULL AND v_other + p_amount_krw > v_price THEN
-      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R9] Payments would exceed the subscription price';
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '[R9] Payments would exceed the agreed price';
     END IF;
   END IF;
 END $$
@@ -287,7 +267,7 @@ BEGIN
   IF NEW.status IN ('paid', 'refunded') AND NEW.paid_at IS NULL THEN
     SET NEW.paid_at = NOW();
   END IF;
-  CALL assert_payment_within_price(NULL, NEW.subscription_id, NEW.amount_krw, NEW.status);
+  CALL assert_payment_within_price(NULL, NEW.subscription_id, NEW.booking_id, NEW.amount_krw, NEW.status);
 END $$
 
 DROP TRIGGER IF EXISTS trg_payments_bu $$
@@ -306,8 +286,9 @@ BEGIN
     END IF;
   END IF;
 
-  IF NEW.amount_krw <> OLD.amount_krw OR NEW.subscription_id <> OLD.subscription_id OR NEW.status <> OLD.status THEN
-    CALL assert_payment_within_price(OLD.payment_id, NEW.subscription_id, NEW.amount_krw, NEW.status);
+  IF NEW.amount_krw <> OLD.amount_krw OR NEW.status <> OLD.status
+     OR NOT (NEW.subscription_id <=> OLD.subscription_id) OR NOT (NEW.booking_id <=> OLD.booking_id) THEN
+    CALL assert_payment_within_price(OLD.payment_id, NEW.subscription_id, NEW.booking_id, NEW.amount_krw, NEW.status);
   END IF;
 END $$
 
@@ -342,11 +323,20 @@ BEGIN
 END $$
 
 -- =====================================================================
--- bookings: R1–R5 via assert_booking_rules, R8 lifecycle
+-- bookings: R1–R4 via assert_booking_rules, R5 pricing and refunds,
+-- R8 lifecycle
 -- =====================================================================
 DROP TRIGGER IF EXISTS trg_bookings_bi $$
 CREATE TRIGGER trg_bookings_bi BEFORE INSERT ON bookings FOR EACH ROW
 BEGIN
+  -- R5: no price given → the trainer's hourly rate for the session length,
+  -- rounded to the nearest 1,000 won
+  IF NEW.price_krw IS NULL THEN
+    SET NEW.price_krw = ROUND(
+      (SELECT hourly_rate_krw FROM trainers WHERE trainer_id = NEW.trainer_id)
+      * TIMESTAMPDIFF(MINUTE, NEW.starts_at, NEW.ends_at) / 60, -3);
+  END IF;
+
   IF NEW.status = 'cancelled' THEN
     IF NEW.cancelled_at IS NULL THEN
       SET NEW.cancelled_at = NOW();
@@ -378,6 +368,17 @@ BEGIN
      AND (NEW.starts_at <> OLD.starts_at OR NEW.ends_at <> OLD.ends_at
        OR NEW.trainer_id <> OLD.trainer_id OR NEW.member_id <> OLD.member_id) THEN
     CALL assert_booking_rules(OLD.booking_id, NEW.member_id, NEW.trainer_id, NEW.starts_at, NEW.ends_at);
+  END IF;
+END $$
+
+-- R5: cancelling a session refunds what was paid for it (and voids any
+-- pending payment), whoever cancels it and however it was cancelled.
+DROP TRIGGER IF EXISTS trg_bookings_au $$
+CREATE TRIGGER trg_bookings_au AFTER UPDATE ON bookings FOR EACH ROW
+BEGIN
+  IF NEW.status = 'cancelled' AND OLD.status <> 'cancelled' THEN
+    UPDATE payments SET status = 'refunded' WHERE booking_id = NEW.booking_id AND status = 'paid';
+    UPDATE payments SET status = 'failed'   WHERE booking_id = NEW.booking_id AND status = 'pending';
   END IF;
 END $$
 

@@ -6,19 +6,21 @@ import {
 await initPage({ role: 'admin' });
 
 const now = new Date();
-const state = { status: '', from: isoDate(new Date(now.getFullYear(), now.getMonth(), 1)), to: todayIso(), search: '' };
+const state = { kind: '', status: '', from: isoDate(new Date(now.getFullYear(), now.getMonth(), 1)), to: todayIso(), search: '' };
 
 render('#page', html`
   <h1 class="page-title h3 mb-1">Payments</h1>
-  <p class="page-subtitle mb-4">Desk and online payments. Allowed status changes: pending → paid / failed, and paid → refunded.</p>
+  <p class="page-subtitle mb-4">Membership and training-session payments, at the desk or online. Allowed status changes: pending → paid / failed, and paid → refunded.</p>
   <div class="card">
     <div class="card-header"><form class="row g-2 align-items-end" id="filters">
       <div class="col-sm-3"><label class="form-label small mb-1">Search</label><input class="form-control form-control-sm" name="search" placeholder="Member or reference"></div>
-      <div class="col-sm-2"><label class="form-label small mb-1">Status</label><select class="form-select form-select-sm" name="status">
+      <div class="col-sm-2"><label class="form-label small mb-1">For</label><select class="form-select form-select-sm" name="kind">
+        <option value="">Everything</option><option value="membership">Memberships</option><option value="training">Training sessions</option></select></div>
+      <div class="col-sm-1"><label class="form-label small mb-1">Status</label><select class="form-select form-select-sm" name="status">
         <option value="">All</option><option value="paid">Paid</option><option value="pending">Pending</option><option value="failed">Failed</option><option value="refunded">Refunded</option></select></div>
       <div class="col-sm-2"><label class="form-label small mb-1">From</label><input type="date" class="form-control form-control-sm" name="from"></div>
       <div class="col-sm-2"><label class="form-label small mb-1">To</label><input type="date" class="form-control form-control-sm" name="to"></div>
-      <div class="col-sm-3 text-sm-end small text-secondary" id="totals"></div>
+      <div class="col-sm-2 text-sm-end small text-secondary" id="totals"></div>
     </form></div>
     <div class="table-responsive" id="table"></div>
   </div>`);
@@ -31,11 +33,11 @@ async function load() {
   const paid = rows.filter((r) => r.status === 'paid').reduce((s, r) => s + r.amountKrw, 0);
   render('#totals', html`${rows.length} payments<br><strong class="text-body">${krw(paid)}</strong> collected`);
   render('#table', rows.length ? html`<table class="table align-middle mb-0">
-    <thead><tr><th>When</th><th>Member</th><th>Plan</th><th>Method</th><th>Reference</th><th>Recorded by</th><th class="text-end">Amount</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>When</th><th>Member</th><th>For</th><th>Method</th><th>Reference</th><th>Recorded by</th><th class="text-end">Amount</th><th>Status</th><th></th></tr></thead>
     <tbody>${rows.map((p) => html`<tr>
       <td class="small">${fmtDateTime(p.paidAt || p.createdAt)}</td>
       <td><a href="/admin/member.html?id=${p.memberId}" class="fw-semibold text-decoration-none">${p.memberName}</a></td>
-      <td class="small">${p.planName}</td><td class="small">${METHOD_LABELS[p.method]}</td>
+      <td class="small"><div>${p.product}</div>${p.detail ? html`<div class="text-secondary">${p.detail}</div>` : ''}</td><td class="small">${METHOD_LABELS[p.method]}</td>
       <td class="small text-secondary">${p.reference || '—'}</td><td class="small">${p.recordedByName || '—'}</td>
       <td class="text-end font-tabular">${krw(p.amountKrw)}</td><td>${badge('payment', p.status)}</td>
       <td class="text-end text-nowrap">

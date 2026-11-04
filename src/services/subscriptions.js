@@ -5,7 +5,7 @@ const {
 } = require('../models');
 const { select, selectOne } = require('../lib/sql');
 const time = require('../lib/time');
-const { badRequest, conflict, notFound } = require('../lib/http-error');
+const { HttpError, badRequest, conflict, notFound } = require('../lib/http-error');
 const { MAX_FREEZE_DAYS, RENEWAL_WINDOW_DAYS } = require('../config/rules');
 
 const LIVE_STATUSES = ['active', 'frozen', 'pending_payment', 'upcoming'];
@@ -58,8 +58,16 @@ async function createSubscription({ memberId, planId, startDate, priceKrw, creat
 
 const onlineReference = () => `PG-${crypto.randomInt(10000000, 99999999)}`;
 
-// Member buys or renews a plan online: subscription + pending online payment.
-async function purchaseOnline(memberId, planId) {
+// The demo payment gateway: no real money moves. `simulateFailure` plays a
+// declined card, which aborts the surrounding transaction so nothing is saved.
+function chargeOnline({ simulateFailure = false } = {}) {
+  if (simulateFailure) throw new HttpError(402, 'The card was declined (simulated). No money was taken; please try again.');
+  return { method: 'online', status: 'paid', paidAt: time.now(), reference: onlineReference() };
+}
+
+// Member buys or renews a plan online. The subscription and its payment are
+// created together, or not at all: an online purchase is always paid.
+async function purchaseOnline(memberId, planId, { simulateFailure = false } = {}) {
   return sequelize.transaction(async (transaction) => {
     await lockMember(memberId, transaction);
     const live = await SubscriptionStatus.findAll({ where: { memberId, status: LIVE_STATUSES }, transaction, raw: true });
@@ -77,15 +85,15 @@ async function purchaseOnline(memberId, planId) {
 
     const sub = await createSubscription({ memberId, planId, createdBy: memberId }, { transaction });
     await Payment.create({
-      subscriptionId: sub.subscriptionId, amountKrw: sub.priceKrw, method: 'online', status: 'pending', recordedBy: memberId,
+      subscriptionId: sub.subscriptionId, amountKrw: sub.priceKrw, recordedBy: memberId, ...chargeOnline({ simulateFailure }),
     }, { transaction });
     return sub;
   });
 }
 
-// Simulated online checkout (no real money): pays the outstanding balance.
-// A simulated decline is committed as a 'failed' payment, so the caller
-// reports it after the transaction instead of throwing inside it.
+// Online payment of a balance left open at the desk (e.g. an expected bank
+// transfer). A simulated decline is committed as a 'failed' payment, so the
+// caller reports it after the transaction instead of throwing inside it.
 async function checkout(memberId, subscriptionId, { simulateFailure = false } = {}) {
   return sequelize.transaction(async (transaction) => {
     if (!(await Subscription.findOne({ where: { subscriptionId, memberId }, transaction, lock: transaction.LOCK.UPDATE }))) {
@@ -108,18 +116,6 @@ async function checkout(memberId, subscriptionId, { simulateFailure = false } = 
       paidAt: simulateFailure ? null : time.now(),
     }, { transaction });
     return { payment, declined: simulateFailure };
-  });
-}
-
-// A member may drop a subscription they have not paid anything for.
-async function cancelUnpaid(memberId, subscriptionId) {
-  return sequelize.transaction(async (transaction) => {
-    const sub = await SubscriptionStatus.findOne({ where: { subscriptionId, memberId }, transaction, raw: true });
-    if (!sub) throw notFound('Subscription');
-    if (sub.status === 'cancelled') throw conflict('This subscription is already cancelled');
-    if (sub.paidKrw > 0) throw conflict('Paid subscriptions can only be cancelled at the front desk');
-    await Payment.update({ status: 'failed' }, { where: { subscriptionId, status: 'pending' }, transaction });
-    await Subscription.update({ cancelledAt: time.now() }, { where: { subscriptionId }, transaction });
   });
 }
 
@@ -193,15 +189,14 @@ async function subscriptionDetail(subscriptionId, { memberId } = {}) {
   return { ...sub, payments, freezes };
 }
 
-// Sessions used this month vs. the plan quota (for dashboards).
-async function monthlyUsage(memberId, quota) {
+// Personal-training sessions booked this calendar month (for dashboards).
+async function sessionsThisMonth(memberId) {
   const row = await selectOne(
-    `SELECT COALESCE(sessions_used, 0) AS used FROM v_member_monthly_usage
+    `SELECT sessions_used FROM v_member_monthly_usage
      WHERE member_id = :memberId AND month = DATE_FORMAT(CURDATE(), '%Y-%m')`,
     { memberId },
   );
-  const used = row?.used || 0;
-  return { quota, used, remaining: Math.max(quota - used, 0) };
+  return row?.sessionsUsed || 0;
 }
 
 async function listSubscriptions({ status, search, memberId } = {}) {
@@ -226,13 +221,13 @@ module.exports = {
   memberSubscriptions,
   nextStartDate,
   createSubscription,
+  chargeOnline,
   purchaseOnline,
   checkout,
-  cancelUnpaid,
   cancelSubscription,
   addFreeze,
   removeFreeze,
   subscriptionDetail,
-  monthlyUsage,
+  sessionsThisMonth,
   listSubscriptions,
 };

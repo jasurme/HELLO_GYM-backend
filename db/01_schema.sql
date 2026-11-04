@@ -80,17 +80,20 @@ CREATE TABLE members (
 -- trainers: trainer profile, 1:1 with users (shared primary key)
 -- ---------------------------------------------------------------------
 CREATE TABLE trainers (
-  trainer_id     INT UNSIGNED NOT NULL,
-  specialization VARCHAR(100) NOT NULL,
-  bio            VARCHAR(500) NULL,
-  hired_on       DATE         NOT NULL DEFAULT (CURRENT_DATE),
+  trainer_id      INT UNSIGNED NOT NULL,
+  specialization  VARCHAR(100) NOT NULL,
+  bio             VARCHAR(500) NULL,
+  hourly_rate_krw INT UNSIGNED NOT NULL DEFAULT 50000,  -- personal-training price per hour
+  hired_on        DATE         NOT NULL DEFAULT (CURRENT_DATE),
   CONSTRAINT pk_trainers      PRIMARY KEY (trainer_id),
   CONSTRAINT fk_trainers_user FOREIGN KEY (trainer_id) REFERENCES users (user_id)
-    ON UPDATE CASCADE ON DELETE CASCADE
+    ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT ck_trainers_rate CHECK (hourly_rate_krw > 0)
 ) ENGINE = InnoDB;
 
 -- ---------------------------------------------------------------------
--- membership_plans: the catalogue of subscription plans
+-- membership_plans: the catalogue of gym-access plans. Personal training
+-- is not part of a plan; each session is booked and paid separately.
 -- ---------------------------------------------------------------------
 CREATE TABLE membership_plans (
   plan_id            SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -98,15 +101,13 @@ CREATE TABLE membership_plans (
   description        VARCHAR(255)      NULL,
   duration_months    TINYINT UNSIGNED  NOT NULL,
   price_krw          INT UNSIGNED      NOT NULL,             -- current list price
-  sessions_per_month TINYINT UNSIGNED  NOT NULL DEFAULT 0,   -- personal-training quota (0 = gym access only)
   is_active          BOOLEAN           NOT NULL DEFAULT TRUE, -- still offered for sale
   created_at         DATETIME          NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at         DATETIME          NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT pk_membership_plans PRIMARY KEY (plan_id),
   CONSTRAINT uq_plans_name       UNIQUE (plan_name),
   CONSTRAINT ck_plans_duration   CHECK (duration_months BETWEEN 1 AND 24),
-  CONSTRAINT ck_plans_price      CHECK (price_krw > 0),
-  CONSTRAINT ck_plans_quota      CHECK (sessions_per_month <= 30)
+  CONSTRAINT ck_plans_price      CHECK (price_krw > 0)
 ) ENGINE = InnoDB;
 
 -- ---------------------------------------------------------------------
@@ -159,30 +160,6 @@ CREATE TABLE subscription_freezes (
 ) ENGINE = InnoDB;
 
 -- ---------------------------------------------------------------------
--- payments: money received (or attempted) for a subscription
--- ---------------------------------------------------------------------
-CREATE TABLE payments (
-  payment_id      INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  subscription_id INT UNSIGNED NOT NULL,
-  amount_krw      INT UNSIGNED NOT NULL,
-  method          ENUM('cash', 'card', 'bank_transfer', 'online')   NOT NULL,
-  status          ENUM('pending', 'paid', 'failed', 'refunded')     NOT NULL DEFAULT 'pending',
-  paid_at         DATETIME     NULL,
-  reference       VARCHAR(100) NULL,           -- receipt / transaction number
-  recorded_by     INT UNSIGNED NULL,           -- admin at the desk, or the member online
-  created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT pk_payments              PRIMARY KEY (payment_id),
-  CONSTRAINT fk_payments_subscription FOREIGN KEY (subscription_id) REFERENCES subscriptions (subscription_id)
-    ON UPDATE CASCADE ON DELETE RESTRICT,
-  CONSTRAINT fk_payments_recorded_by  FOREIGN KEY (recorded_by) REFERENCES users (user_id)
-    ON UPDATE CASCADE ON DELETE SET NULL,
-  CONSTRAINT ck_payments_amount       CHECK (amount_krw > 0),
-  CONSTRAINT ck_payments_paid_at      CHECK ((status IN ('paid', 'refunded')) = (paid_at IS NOT NULL)),
-  INDEX ix_payments_status_paid_at (status, paid_at)
-) ENGINE = InnoDB;
-
--- ---------------------------------------------------------------------
 -- trainer_availability: recurring weekly working hours
 --   day_of_week follows ISO-8601: 1 = Monday … 7 = Sunday
 --   Times sit on a 30-minute grid so sessions line up.
@@ -204,7 +181,7 @@ CREATE TABLE trainer_availability (
 ) ENGINE = InnoDB;
 
 -- ---------------------------------------------------------------------
--- bookings: 1-on-1 personal-training sessions
+-- bookings: 1-on-1 personal-training sessions, paid per session
 --   Lifecycle: booked → completed | no_show | cancelled
 -- ---------------------------------------------------------------------
 CREATE TABLE bookings (
@@ -214,6 +191,7 @@ CREATE TABLE bookings (
   starts_at    DATETIME     NOT NULL,
   ends_at      DATETIME     NOT NULL,
   status       ENUM('booked', 'completed', 'no_show', 'cancelled') NOT NULL DEFAULT 'booked',
+  price_krw    INT UNSIGNED NOT NULL,   -- price agreed at booking; filled from the trainer's rate when omitted
   member_note  VARCHAR(255) NULL,   -- e.g. "focus on lower back"
   trainer_note VARCHAR(255) NULL,   -- written after the session
   cancelled_at DATETIME     NULL,
@@ -235,4 +213,35 @@ CREATE TABLE bookings (
   INDEX ix_bookings_trainer_time (trainer_id, starts_at, ends_at),
   INDEX ix_bookings_member_time  (member_id, starts_at, ends_at),
   INDEX ix_bookings_status_time  (status, starts_at)
+) ENGINE = InnoDB;
+
+-- ---------------------------------------------------------------------
+-- payments: money received (or attempted) for EITHER a subscription OR a
+-- personal-training session (exactly one of the two references is set).
+-- FK actions are RESTRICT because MySQL allows no cascading action on a
+-- column that a CHECK constraint uses.
+-- ---------------------------------------------------------------------
+CREATE TABLE payments (
+  payment_id      INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  subscription_id INT UNSIGNED NULL,           -- a membership payment...
+  booking_id      INT UNSIGNED NULL,           -- ...or a training-session payment
+  amount_krw      INT UNSIGNED NOT NULL,
+  method          ENUM('cash', 'card', 'bank_transfer', 'online')   NOT NULL,
+  status          ENUM('pending', 'paid', 'failed', 'refunded')     NOT NULL DEFAULT 'pending',
+  paid_at         DATETIME     NULL,
+  reference       VARCHAR(100) NULL,           -- receipt / transaction number
+  recorded_by     INT UNSIGNED NULL,           -- admin at the desk, or the member online
+  created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT pk_payments              PRIMARY KEY (payment_id),
+  CONSTRAINT fk_payments_subscription FOREIGN KEY (subscription_id) REFERENCES subscriptions (subscription_id)
+    ON UPDATE RESTRICT ON DELETE RESTRICT,
+  CONSTRAINT fk_payments_booking      FOREIGN KEY (booking_id) REFERENCES bookings (booking_id)
+    ON UPDATE RESTRICT ON DELETE RESTRICT,
+  CONSTRAINT fk_payments_recorded_by  FOREIGN KEY (recorded_by) REFERENCES users (user_id)
+    ON UPDATE CASCADE ON DELETE SET NULL,
+  CONSTRAINT ck_payments_target       CHECK ((subscription_id IS NULL) <> (booking_id IS NULL)),
+  CONSTRAINT ck_payments_amount       CHECK (amount_krw > 0),
+  CONSTRAINT ck_payments_paid_at      CHECK ((status IN ('paid', 'refunded')) = (paid_at IS NOT NULL)),
+  INDEX ix_payments_status_paid_at (status, paid_at)
 ) ENGINE = InnoDB;

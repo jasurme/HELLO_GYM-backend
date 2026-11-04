@@ -15,7 +15,9 @@ describe('database triggers and constraints (db/06_rule_tests.sql)', () => {
     expect(failures).toEqual([]);
   });
 
-  test.each(['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R8', 'R9', 'R10', 'R11', 'R12'])('rule %s is demonstrated and enforced', (rule) => {
+  // R5 (session pricing and refunds) never rejects anything: the script shows
+  // the trigger-filled price and the automatic refund instead (see booking tests).
+  test.each(['R1', 'R2', 'R3', 'R4', 'R6', 'R8', 'R9', 'R10', 'R11', 'R12'])('rule %s is demonstrated and enforced', (rule) => {
     const cases = results.filter((r) => r.expect === rule);
     expect(cases.length).toBeGreaterThan(0);
     for (const c of cases) expect(c.error).toMatch(new RegExp(`^\\[${rule}\\]`));
@@ -23,7 +25,7 @@ describe('database triggers and constraints (db/06_rule_tests.sql)', () => {
 
   test('CHECK and FOREIGN KEY constraints are demonstrated', () => {
     const constraints = results.filter((r) => /^(ck|fk)_/.test(r.expect));
-    expect(constraints.map((c) => c.expect)).toEqual(expect.arrayContaining(['ck_bookings_length', 'ck_bookings_grid', 'fk_payments_subscription', 'ck_payments_amount']));
+    expect(constraints.map((c) => c.expect)).toEqual(expect.arrayContaining(['ck_bookings_length', 'ck_bookings_grid', 'ck_payments_target', 'fk_payments_subscription', 'ck_payments_amount']));
     for (const c of constraints) expect(c.passed).toBe(true);
   });
 });

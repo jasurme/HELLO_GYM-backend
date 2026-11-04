@@ -35,6 +35,7 @@ async function summary() {
     activeMembers: active.n,
     revenueThisMonthKrw: revenue.thisMonthKrw || 0,
     revenueThisYearKrw: revenue.thisYearKrw || 0,
+    trainingThisYearKrw: revenue.thisYearTrainingKrw || 0,
     sessionsThisWeek: sessions.n,
     expiringIn7Days: expiring.n,
     pendingPayments: outstanding.n,
@@ -48,10 +49,10 @@ async function activeMemberships() {
 }
 
 async function revenue() {
-  const [headline, trend, byPlanMethod, outstanding] = await Promise.all([
-    run('revenue_headline'), run('revenue_trend'), run('revenue_by_plan_method'), run('outstanding_balances'),
+  const [headline, trend, byProductMethod, outstanding] = await Promise.all([
+    run('revenue_headline'), run('revenue_trend'), run('revenue_by_product_method'), run('outstanding_balances'),
   ]);
-  return { headline: headline[0], trend, byPlanMethod, outstanding };
+  return { headline: headline[0], trend, byProductMethod, outstanding };
 }
 
 // Report 3 for any date range (the script's 3b uses the last 30 days).
@@ -69,7 +70,8 @@ async function trainerBookings({ from, to }) {
          COALESCE(SUM(b.status = 'no_show'), 0)                          AS no_shows,
          ROUND(100 * SUM(b.status = 'no_show') / NULLIF(SUM(b.status IN ('completed', 'no_show')), 0), 1) AS no_show_pct,
          COALESCE(ROUND(SUM(TIMESTAMPDIFF(MINUTE, b.starts_at, b.ends_at)) / 60, 1), 0) AS hours,
-         COUNT(DISTINCT b.member_id)                                     AS members
+         COUNT(DISTINCT b.member_id)                                     AS members,
+         COALESCE(SUM(b.price_krw), 0)                                   AS revenue_krw  -- live sessions are paid
        FROM trainers t
        JOIN users u ON u.user_id = t.trainer_id
        LEFT JOIN bookings b ON b.trainer_id = t.trainer_id

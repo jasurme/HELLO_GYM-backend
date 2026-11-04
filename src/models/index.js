@@ -43,6 +43,7 @@ const Trainer = sequelize.define('Trainer', {
   trainerId: { type: INTEGER.UNSIGNED, primaryKey: true },
   specialization: { type: STRING(100), allowNull: false },
   bio: STRING(500),
+  hourlyRateKrw: { type: INTEGER.UNSIGNED, allowNull: false, defaultValue: 50000 },
   hiredOn: DATEONLY,
 }, { tableName: 'trainers', timestamps: false });
 
@@ -52,7 +53,6 @@ const Plan = sequelize.define('Plan', {
   description: STRING(255),
   durationMonths: { type: TINYINT.UNSIGNED, allowNull: false },
   priceKrw: { type: INTEGER.UNSIGNED, allowNull: false },
-  sessionsPerMonth: { type: TINYINT.UNSIGNED, allowNull: false, defaultValue: 0 },
   isActive: { type: BOOLEAN, allowNull: false, defaultValue: true },
 }, { tableName: 'membership_plans', ...timestamps });
 
@@ -76,9 +76,11 @@ const SubscriptionFreeze = sequelize.define('SubscriptionFreeze', {
   createdBy: INTEGER.UNSIGNED,
 }, { tableName: 'subscription_freezes', ...createdOnly });
 
+// A payment is for a subscription OR a training session (ck_payments_target).
 const Payment = sequelize.define('Payment', {
   paymentId: { type: INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
-  subscriptionId: { type: INTEGER.UNSIGNED, allowNull: false },
+  subscriptionId: INTEGER.UNSIGNED,
+  bookingId: INTEGER.UNSIGNED,
   amountKrw: { type: INTEGER.UNSIGNED, allowNull: false },
   method: { type: ENUM('cash', 'card', 'bank_transfer', 'online'), allowNull: false },
   status: { type: ENUM('pending', 'paid', 'failed', 'refunded'), allowNull: false, defaultValue: 'pending' },
@@ -102,6 +104,8 @@ const Booking = sequelize.define('Booking', {
   startsAt: { type: DATE, allowNull: false },
   endsAt: { type: DATE, allowNull: false },
   status: { type: ENUM('booked', 'completed', 'no_show', 'cancelled'), allowNull: false, defaultValue: 'booked' },
+  // Left out on insert so trg_bookings_bi prices it from the trainer's rate (R5).
+  priceKrw: INTEGER.UNSIGNED,
   memberNote: STRING(255),
   trainerNote: STRING(255),
   cancelledAt: DATE,
@@ -118,7 +122,6 @@ const SubscriptionStatus = sequelize.define('SubscriptionStatus', {
   memberEmail: STRING,
   planId: SMALLINT.UNSIGNED,
   planName: STRING,
-  sessionsPerMonth: TINYINT.UNSIGNED,
   startDate: DATEONLY,
   endDate: DATEONLY,
   priceKrw: INTEGER.UNSIGNED,
@@ -142,6 +145,8 @@ const TrainerSchedule = sequelize.define('TrainerSchedule', {
   endsAt: DATE,
   durationMin: INTEGER,
   status: STRING,
+  priceKrw: INTEGER.UNSIGNED,
+  paymentStatus: STRING,
   memberNote: STRING,
   trainerNote: STRING,
   cancelledAt: DATE,
@@ -170,6 +175,9 @@ SubscriptionFreeze.belongsTo(Subscription, { foreignKey: 'subscriptionId' });
 
 Trainer.hasMany(TrainerAvailability, { foreignKey: 'trainerId' });
 TrainerAvailability.belongsTo(Trainer, { foreignKey: 'trainerId' });
+
+Booking.hasMany(Payment, { foreignKey: 'bookingId' });
+Payment.belongsTo(Booking, { foreignKey: 'bookingId' });
 
 Member.hasMany(Booking, { foreignKey: 'memberId' });
 Booking.belongsTo(Member, { foreignKey: 'memberId' });

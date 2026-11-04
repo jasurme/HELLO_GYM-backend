@@ -1,5 +1,5 @@
 import {
-  api, initPage, html, render, emptyState, formModal, toast, num, $,
+  api, initPage, html, render, emptyState, formModal, toast, num, krw, $,
 } from '../app.js';
 import { personCell } from '../components.js';
 
@@ -7,7 +7,7 @@ await initPage({ role: 'admin' });
 
 render('#page', html`
   <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
-    <div><h1 class="page-title h3 mb-1">Trainers</h1><p class="page-subtitle mb-0">Lifetime booking figures come from the view v_trainer_booking_stats.</p></div>
+    <div><h1 class="page-title h3 mb-1">Trainers</h1><p class="page-subtitle mb-0">Sessions are paid per hour at each trainer’s rate. Figures come from the view v_trainer_booking_stats.</p></div>
     <button class="btn btn-primary" id="newBtn"><i class="bi bi-person-plus me-1"></i>New trainer</button>
   </div>
   <div class="card"><div class="table-responsive" id="table"></div></div>`);
@@ -15,13 +15,14 @@ render('#page', html`
 async function load() {
   const rows = await api('/admin/trainers');
   render('#table', rows.length ? html`<table class="table table-hover align-middle mb-0">
-    <thead><tr><th>Trainer</th><th>Specialization</th><th class="text-end">Weekly windows</th><th class="text-end">Upcoming</th>
-      <th class="text-end">Completed</th><th class="text-end">No-shows</th><th class="text-end">Hours</th><th class="text-end">Members</th></tr></thead>
+    <thead><tr><th>Trainer</th><th>Specialization</th><th class="text-end">Rate / hour</th><th class="text-end">Upcoming</th>
+      <th class="text-end">Completed</th><th class="text-end">No-shows</th><th class="text-end">Hours</th><th class="text-end">Members</th><th class="text-end">PT revenue</th></tr></thead>
     <tbody>${rows.map((t) => html`<tr class="clickable ${t.isActive ? '' : 'text-secondary'}" data-href="/admin/trainer.html?id=${t.trainerId}">
       <td>${personCell(t.trainerName, t.trainerId, t.email)}${t.isActive ? '' : html`<span class="badge text-bg-secondary ms-2">deactivated</span>`}</td>
       <td class="small">${t.specialization}</td>
-      <td class="text-end">${t.windows}</td><td class="text-end">${t.upcoming}</td><td class="text-end">${num(t.completed)}</td>
+      <td class="text-end font-tabular">${krw(t.hourlyRateKrw)}</td><td class="text-end">${t.upcoming}</td><td class="text-end">${num(t.completed)}</td>
       <td class="text-end">${t.noShows}</td><td class="text-end">${t.hoursDelivered}</td><td class="text-end">${t.distinctMembers}</td>
+      <td class="text-end font-tabular">${krw(t.revenueKrw)}</td>
     </tr>`)}</tbody></table>` : emptyState('person-badge', 'No trainers yet.'));
 }
 
@@ -39,7 +40,8 @@ $('#newBtn').addEventListener('click', () => formModal({
     <div class="col-sm-6"><label class="form-label">Email</label><input class="form-control" name="email" type="email"></div>
     <div class="col-sm-6"><label class="form-label">Phone</label><input class="form-control" name="phone" type="tel"></div>
     <div class="col-sm-6"><label class="form-label">Specialization</label><input class="form-control" name="specialization" placeholder="e.g. Strength & Conditioning"></div>
-    <div class="col-sm-6"><label class="form-label">Hired on</label><input class="form-control" name="hiredOn" type="date"></div>
+    <div class="col-sm-3"><label class="form-label">Rate / hour (KRW)</label><input class="form-control" name="hourlyRateKrw" type="number" min="1000" step="1000" value="50000"></div>
+    <div class="col-sm-3"><label class="form-label">Hired on</label><input class="form-control" name="hiredOn" type="date"></div>
     <div class="col-12"><label class="form-label">Bio</label><textarea class="form-control" name="bio" rows="2" maxlength="500"></textarea></div>
     <div class="col-sm-6"><label class="form-label">Temporary password</label><input class="form-control" name="password"></div>
   </div>`,

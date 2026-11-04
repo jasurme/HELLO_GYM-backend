@@ -21,12 +21,12 @@ const BOOKING_HORIZON_DAYS = 21;   // how far ahead members have booked
 // ---------------------------------------------------------------------
 // Reference data
 // ---------------------------------------------------------------------
+// Memberships are gym access only; personal training is paid per session.
 const PLANS = [
-  { id: 1, name: 'Basic Monthly',     months: 1, price: 70000,   quota: 0, weight: 25, description: 'Gym floor, cardio zone and lockers for one month' },
-  { id: 2, name: 'Basic Quarterly',   months: 3, price: 189000,  quota: 0, weight: 20, description: 'Three months of gym access at a lower monthly rate' },
-  { id: 3, name: 'PT Monthly',        months: 1, price: 290000,  quota: 4, weight: 25, description: 'Gym access plus 4 personal-training sessions a month' },
-  { id: 4, name: 'PT Quarterly',      months: 3, price: 790000,  quota: 4, weight: 20, description: 'Three months of gym access plus 4 PT sessions a month' },
-  { id: 5, name: 'Premium Half-Year', months: 6, price: 1590000, quota: 8, weight: 10, description: 'Six months of gym access plus 8 PT sessions a month' },
+  { id: 1, name: '1 Month',  months: 1,  price: 70000,  weight: 35, description: 'Gym floor, cardio zone, classes area and lockers for one month' },
+  { id: 2, name: '3 Months', months: 3,  price: 189000, weight: 30, description: 'Three months of gym access: ₩63,000 a month' },
+  { id: 3, name: '6 Months', months: 6,  price: 342000, weight: 20, description: 'Six months of gym access: ₩57,000 a month' },
+  { id: 4, name: '1 Year',   months: 12, price: 600000, weight: 15, description: 'A full year of gym access: ₩50,000 a month' },
 ];
 
 const ADMINS = [
@@ -36,41 +36,42 @@ const ADMINS = [
 
 // windows: [isoDays, from, to]   (1 = Monday … 7 = Sunday)
 const TRAINERS = [
-  { first: 'Daniel', last: 'Park', specialization: 'Strength & Conditioning', hiredYearsAgo: 4,
+  { first: 'Daniel', last: 'Park', rate: 60000, specialization: 'Strength & Conditioning', hiredYearsAgo: 4,
     bio: 'Former national-team powerlifter. Builds safe, progressive strength programs for every level.',
     windows: [[[1, 2, 3, 4, 5], '07:00', '11:00'], [[1, 2, 3, 4, 5], '17:00', '21:00'], [[6], '09:00', '13:00']] },
-  { first: 'Soo-ah', last: 'Lee', specialization: 'Yoga & Mobility', hiredYearsAgo: 3,
+  { first: 'Soo-ah', last: 'Lee', rate: 50000, specialization: 'Yoga & Mobility', hiredYearsAgo: 3,
     bio: 'RYT-500 yoga teacher focused on flexibility, breathing and recovery.',
     windows: [[[1, 3, 5], '08:00', '14:00'], [[2, 4], '15:00', '21:00']] },
-  { first: 'Hyun-woo', last: 'Choi', specialization: 'Boxing & HIIT', hiredYearsAgo: 2,
+  { first: 'Hyun-woo', last: 'Choi', rate: 55000, specialization: 'Boxing & HIIT', hiredYearsAgo: 2,
     bio: 'Amateur boxing champion. High-energy conditioning and pad work.',
     windows: [[[2, 3, 4, 5, 6], '12:00', '20:00']] },
-  { first: 'Emily', last: 'Jung', specialization: 'Weight Loss & Nutrition', hiredYearsAgo: 2,
+  { first: 'Emily', last: 'Jung', rate: 50000, specialization: 'Weight Loss & Nutrition', hiredYearsAgo: 2,
     bio: 'Certified nutrition coach combining training plans with sustainable eating habits.',
     windows: [[[1, 2, 3, 4, 5], '09:00', '13:00'], [[1, 2, 3, 4, 5], '18:00', '21:00']] },
-  { first: 'Min-jae', last: 'Kang', specialization: 'Rehabilitation & Posture', hiredYearsAgo: 5,
+  { first: 'Min-jae', last: 'Kang', rate: 70000, specialization: 'Rehabilitation & Posture', hiredYearsAgo: 5,
     bio: 'Physical therapist helping members return to training after injury.',
     windows: [[[1, 2, 3, 4], '10:00', '18:00']] },
-  { first: 'Ji-hye', last: 'Yoon', specialization: 'Pilates & Core', hiredYearsAgo: 1,
+  { first: 'Ji-hye', last: 'Yoon', rate: 50000, specialization: 'Pilates & Core', hiredYearsAgo: 1,
     bio: 'Mat and reformer Pilates instructor with a focus on core stability.',
     windows: [[[3, 4, 5, 6, 7], '09:00', '15:00']] },
 ];
 
 // Fixed members with a known state, used in the README and the demo.
-// currentPlan / startDaysAgo define the member's latest subscription.
+// currentPlan / startDaysAgo define the member's latest subscription;
+// ptPerMonth is how many paid training sessions they usually book (0 = none).
 const DEMO_MEMBERS = [
-  { first: 'Minji', last: 'Kim', joinedDaysAgo: 300, currentPlan: 5, startDaysAgo: 40, engagement: 0.75, favorite: 0,
-    story: 'Active Premium member with upcoming sessions' },
-  { first: 'Joon-ho', last: 'Lee', joinedDaysAgo: 120, currentPlan: 1, startDaysAgo: 50, engagement: 0.5, favorite: 2,
-    story: 'Subscription expired about 20 days ago: cannot book (R1)' },
-  { first: 'Sara', last: 'Ahmed', joinedDaysAgo: 0, currentPlan: 3, startDaysAgo: 0, payment: 'pending', engagement: 0.8, favorite: 3,
-    story: 'New member, PT Monthly awaiting online payment' },
-  { first: 'Tae-yang', last: 'Seo', joinedDaysAgo: 75, currentPlan: 1, startDaysAgo: 10, engagement: 0.5, favorite: 0,
-    story: 'Active Basic plan without personal training (R5)' },
-  { first: 'Yuna', last: 'Choi', joinedDaysAgo: 200, currentPlan: 3, startDaysAgo: 25, engagement: 0.9, favorite: 1,
-    story: 'PT Monthly ending within a week: shows in "Expiring soon"' },
-  { first: 'Ethan', last: 'Brooks', joinedDaysAgo: 150, currentPlan: 4, startDaysAgo: 30, engagement: 0.7, favorite: 4,
-    freeze: { startDaysAgo: 3, days: 14 }, story: 'PT Quarterly currently frozen (travel)' },
+  { first: 'Minji', last: 'Kim', joinedDaysAgo: 300, currentPlan: 3, startDaysAgo: 40, ptPerMonth: 6, favorite: 0,
+    story: 'Active 6-month member who trains with Daniel every week' },
+  { first: 'Joon-ho', last: 'Lee', joinedDaysAgo: 120, currentPlan: 1, startDaysAgo: 50, ptPerMonth: 3, favorite: 2,
+    story: 'Membership expired about 20 days ago: cannot book (R1)' },
+  { first: 'Sara', last: 'Ahmed', joinedDaysAgo: 0, currentPlan: 1, startDaysAgo: 0, ptPerMonth: 0, favorite: 3,
+    story: 'Signed up and paid online today, no sessions yet' },
+  { first: 'Tae-yang', last: 'Seo', joinedDaysAgo: 75, currentPlan: 1, startDaysAgo: 20, ptPerMonth: 0, favorite: 0,
+    renewal: { plan: 2, payment: 'pending_desk' }, story: 'Gym only (no trainer); renewal awaiting bank transfer' },
+  { first: 'Yuna', last: 'Choi', joinedDaysAgo: 200, currentPlan: 1, startDaysAgo: 25, ptPerMonth: 4, favorite: 1,
+    story: 'Membership ends within a week: shows in "Expiring soon"' },
+  { first: 'Ethan', last: 'Brooks', joinedDaysAgo: 150, currentPlan: 2, startDaysAgo: 30, ptPerMonth: 3, favorite: 4,
+    freeze: { startDaysAgo: 3, days: 14 }, story: 'Membership frozen right now (travel)' },
 ];
 const RANDOM_MEMBER_COUNT = 54;
 
@@ -127,7 +128,6 @@ const addMinutes = (d, n) => new Date(d.getTime() + n * 60000);
 const atMinutes = (day, minutes) => new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, minutes);
 const daysBetween = (a, b) => Math.round((dateOnly(b) - dateOnly(a)) / 86400000);
 const isoDow = (d) => ((d.getDay() + 6) % 7) + 1;
-const monthKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
 const toMinutes = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 const minDate = (a, b) => (a < b ? a : b);
 const maxDate = (a, b) => (a > b ? a : b);
@@ -181,7 +181,7 @@ function generateSeed({ now = new Date(), seed = 20261103 } = {}) {
     for (const [days, from, to] of t.windows) {
       for (const d of days) (windowsByDay[d] ||= []).push({ from: toMinutes(from), to: toMinutes(to), fromText: from, toText: to });
     }
-    return { ...user, specialization: t.specialization, bio: t.bio, hiredOn: hired, windowsByDay };
+    return { ...user, specialization: t.specialization, bio: t.bio, rate: t.rate, hiredOn: hired, windowsByDay };
   });
 
   // --- members ---------------------------------------------------------
@@ -200,7 +200,7 @@ function generateSeed({ now = new Date(), seed = 20261103 } = {}) {
     memberSpecs.push({
       first, last,
       joinedDaysAgo: Math.floor(HISTORY_DAYS * Math.sqrt(R.rnd())),
-      engagement: 0.4 + R.rnd() * 0.6,
+      ptPerMonth: R.chance(0.55) ? R.int(1, 6) : 0,   // about half the members also book trainers
       favorite: R.int(0, trainers.length - 1),
     });
   }
@@ -214,41 +214,40 @@ function generateSeed({ now = new Date(), seed = 20261103 } = {}) {
       emergencyName: hasContact ? `${R.pick(GIVEN)} ${spec.last}` : null,
       emergencyPhone: hasContact ? randomPhone() : null,
       favorite: trainers[spec.favorite],
-      engagement: spec.engagement,
+      ptPerMonth: spec.ptPerMonth,
     };
   });
 
   // --- subscriptions, payments, freezes, bookings -----------------------
   const trainerBusy = new Map();   // "trainerId|yyyy-mm-dd" -> [[from, to], ...] in minutes
   const memberBusy = new Map();
-  const monthUsage = new Map();    // "memberId|yyyy-mm" -> live sessions that month
   const subscriptions = [];
   let subId = 0;
+  let bookingId = 0;
 
   const isBusy = (map, key, from, to) => (map.get(key) || []).some(([a, b]) => a < to && b > from);
   const markBusy = (map, key, from, to) => { if (!map.has(key)) map.set(key, []); map.get(key).push([from, to]); };
 
   const deskAdmin = () => R.pick(admins).id;
 
+  const reference = (method) => ({ card: 'CARD-', online: 'PG-', cash: 'RCPT-', bank_transfer: 'TRF-' }[method]) + R.int(10000000, 99999999);
+
+  // Membership payments. Online purchases are paid at once (an account only
+  // exists after paying); the desk may also take a bank transfer later.
   function makePayments(member, sub, mode) {
     const payments = [];
-    if (mode === 'none') return payments;
-    if (mode === 'pending') {
-      payments.push({ amount: sub.price, method: 'online', status: 'pending', paidAt: null,
-        createdAt: sub.createdAt, recordedBy: member.id, reference: null });
+    if (mode === 'pending_desk') {
+      payments.push({ amount: sub.price, method: 'bank_transfer', status: 'pending', paidAt: null,
+        createdAt: sub.createdAt, recordedBy: deskAdmin(), reference: null });
       return payments;
     }
-    const method = R.weighted([['card', 50], ['online', 22], ['cash', 15], ['bank_transfer', 13]]);
+    const method = sub.createdBy === member.id ? 'online' : R.weighted([['card', 65], ['cash', 20], ['bank_transfer', 15]]);
     const recordedBy = method === 'online' ? member.id : deskAdmin();
     const firstPaid = addMinutes(sub.createdAt, R.int(1, 25));
-    const ref = () => ({ card: 'CARD-', online: 'PG-', cash: 'RCPT-', bank_transfer: 'TRF-' }[method]) + R.int(10000000, 99999999);
+    const ref = () => reference(method);
 
-    if (method === 'online' && R.chance(0.12)) {
-      payments.push({ amount: sub.price, method: 'online', status: 'failed', paidAt: null,
-        createdAt: addMinutes(firstPaid, -3), recordedBy: member.id, reference: `PG-${R.int(10000000, 99999999)}` });
-    }
     const secondDue = timeOn(addDays(sub.start, 30));
-    if (sub.price >= 700000 && R.chance(0.3) && secondDue < now) {
+    if (method !== 'online' && sub.price >= 300000 && R.chance(0.3) && secondDue < now) {
       const half = Math.round(sub.price / 2000) * 1000;
       payments.push({ amount: half, method, status: 'paid', paidAt: firstPaid, createdAt: firstPaid, recordedBy, reference: ref() });
       payments.push({ amount: sub.price - half, method, status: 'paid', paidAt: secondDue, createdAt: secondDue, recordedBy, reference: ref() });
@@ -259,9 +258,9 @@ function generateSeed({ now = new Date(), seed = 20261103 } = {}) {
     return payments;
   }
 
+  // Paid personal-training sessions while the membership is valid.
   function makeBookings(member, sub, until) {
-    const quotaPlan = sub.plan;
-    if (quotaPlan.quota === 0) return [];
+    if (!member.ptPerMonth) return [];
     const bookings = [];
     const windowEnd = minDate(until, horizon);
     let monthStart = new Date(sub.start.getFullYear(), sub.start.getMonth(), 1);
@@ -271,10 +270,7 @@ function generateSeed({ now = new Date(), seed = 20261103 } = {}) {
       const to = minDate(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0), windowEnd);
       const span = daysBetween(from, to) + 1;
       const monthDays = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
-      const usageKey = `${member.id}|${monthKey(monthStart)}`;
-      const used = monthUsage.get(usageKey) || 0;
-      let target = Math.round(quotaPlan.quota * member.engagement * (span / monthDays) + (R.rnd() - 0.4));
-      target = Math.max(0, Math.min(target, quotaPlan.quota - used));
+      let target = Math.max(0, Math.round(member.ptPerMonth * (span / monthDays) + (R.rnd() - 0.4)));
 
       for (let attempt = 0; target > 0 && attempt < 80; attempt++) {
         const day = addDays(from, R.int(0, span - 1));
@@ -315,16 +311,23 @@ function generateSeed({ now = new Date(), seed = 20261103 } = {}) {
           cancelledAt = new Date(createdAt.getTime() + R.rnd() * Math.max(latest - createdAt, 60000));
         }
 
+        // Same rule as trg_bookings_bi: hourly rate × length, rounded to 1,000 won.
+        const price = Math.round((trainer.rate * duration) / 60 / 1000) * 1000;
+        const method = R.chance(0.7) ? 'online' : 'card';
         bookings.push({
-          trainerId: trainer.id, startsAt, endsAt, status, createdAt, cancelledAt,
+          id: ++bookingId, trainerId: trainer.id, startsAt, endsAt, status, price, createdAt, cancelledAt,
           cancelledBy: cancelledAt ? member.id : null,
           memberNote: R.pick(MEMBER_NOTES),
           trainerNote: status === 'completed' ? R.pick(TRAINER_NOTES) : null,
+          // Paid when booked; a cancelled session's payment is refunded (R5).
+          payment: {
+            amount: price, method, status: status === 'cancelled' ? 'refunded' : 'paid', paidAt: createdAt,
+            recordedBy: method === 'online' ? member.id : deskAdmin(), reference: reference(method),
+          },
         });
         if (status !== 'cancelled') {
           markBusy(trainerBusy, tKey, startMin, startMin + duration);
           markBusy(memberBusy, mKey, startMin, startMin + duration);
-          monthUsage.set(usageKey, (monthUsage.get(usageKey) || 0) + 1);
           target--;
         }
       }
@@ -341,7 +344,7 @@ function generateSeed({ now = new Date(), seed = 20261103 } = {}) {
       price: discounted ? Math.round((plan.price * 0.9) / 1000) * 1000 : plan.price,
       createdAt, cancelledAt: null, refund: false, freezes: [],
     };
-    sub.createdBy = R.chance(0.3) ? member.id : deskAdmin();
+    sub.createdBy = paymentMode === 'paid' && R.chance(0.45) ? member.id : deskAdmin();
     sub.payments = makePayments(member, sub, paymentMode);
     sub.effectiveEnd = sub.end;
 
@@ -378,9 +381,9 @@ function generateSeed({ now = new Date(), seed = 20261103 } = {}) {
       if (!open && planEnd(cursor, plan.months) >= limit) break;
 
       const current = planEnd(cursor, plan.months) >= today;
-      const pending = open && current && cursor >= addDays(today, -7) && R.chance(0.12);
+      const pending = open && current && cursor >= addDays(today, -7) && R.chance(0.05);
       // A freeze pushes the end date back, which could collide with `limit`.
-      const sub = addSubscription(member, { plan, start: cursor, createdAt, paymentMode: pending ? 'pending' : 'paid', allowRandomFreeze: open });
+      const sub = addSubscription(member, { plan, start: cursor, createdAt, paymentMode: pending ? 'pending_desk' : 'paid', allowRandomFreeze: open });
       previous = plan;
       if (pending) break;
 
@@ -414,15 +417,24 @@ function generateSeed({ now = new Date(), seed = 20261103 } = {}) {
     }
     const currentStart = addDays(today, -spec.startDaysAgo);
     if (daysBetween(member.joined, currentStart) > 0) buildHistory(member, member.joined, currentStart, { open: false });
-    addSubscription(member, {
+    const current = addSubscription(member, {
       plan: PLANS.find((p) => p.id === spec.currentPlan),
       start: currentStart,
       createdAt: spec.startDaysAgo === 0 ? new Date(now.getTime() - 20 * 60000) : timeOn(currentStart),
-      paymentMode: spec.payment || 'paid',
       freeze: spec.freeze ? { start: addDays(today, -spec.freeze.startDaysAgo), days: spec.freeze.days } : null,
       allowCancel: false,
       allowRandomFreeze: false,
     });
+    if (spec.renewal) {
+      addSubscription(member, {
+        plan: PLANS.find((p) => p.id === spec.renewal.plan),
+        start: addDays(current.effectiveEnd, 1),
+        createdAt: timeOn(addDays(today, -2)),
+        paymentMode: spec.renewal.payment,
+        allowCancel: false,
+        allowRandomFreeze: false,
+      });
+    }
   }
 
   // The demo trainer always has a couple of recent sessions left to mark.
@@ -461,16 +473,16 @@ SET NAMES utf8mb4;
 ${rows(users.map((u) => [u.id, u.role, v(u.email), v(passwordHash), v(u.first), v(u.last), v(u.phone), 1, v(u.createdAt), v(u.createdAt)]))};
 `);
 
-  out.push(`INSERT INTO trainers (trainer_id, specialization, bio, hired_on) VALUES
-${rows(trainers.map((t) => [t.id, v(t.specialization), v(t.bio), d(t.hiredOn)]))};
+  out.push(`INSERT INTO trainers (trainer_id, specialization, bio, hourly_rate_krw, hired_on) VALUES
+${rows(trainers.map((t) => [t.id, v(t.specialization), v(t.bio), t.rate, d(t.hiredOn)]))};
 `);
 
   out.push(`INSERT INTO members (member_id, date_of_birth, emergency_contact_name, emergency_contact_phone, joined_on) VALUES
 ${rows(members.map((m) => [m.id, d(m.dateOfBirth), v(m.emergencyName), v(m.emergencyPhone), d(m.joined)]))};
 `);
 
-  out.push(`INSERT INTO membership_plans (plan_id, plan_name, description, duration_months, price_krw, sessions_per_month, is_active, created_at) VALUES
-${rows(PLANS.map((p) => [p.id, v(p.name), v(p.description), p.months, p.price, p.quota, 1, v(addDays(today, -HISTORY_DAYS - 30))]))};
+  out.push(`INSERT INTO membership_plans (plan_id, plan_name, description, duration_months, price_krw, is_active, created_at) VALUES
+${rows(PLANS.map((p) => [p.id, v(p.name), v(p.description), p.months, p.price, 1, v(addDays(today, -HISTORY_DAYS - 30))]))};
 `);
 
   const availability = [];
@@ -483,8 +495,9 @@ ${rows(PLANS.map((p) => [p.id, v(p.name), v(p.description), p.months, p.price, p
 ${rows(availability)};
 `);
 
-  // Per member, in time order: subscription → payments → freezes → bookings,
-  // then cancellations and refunds, which is the order the triggers need.
+  // Per member, in time order: subscription → payments → freezes → bookings
+  // → session payments, then cancellations and refunds: the order the
+  // triggers need.
   let paymentCount = 0;
   let bookingCount = 0;
   for (const member of members) {
@@ -503,8 +516,11 @@ ${rows(s.payments.map((p) => [s.id, p.amount, v(p.method), v(p.status), v(p.paid
       }
       if (s.bookings.length) {
         bookingCount += s.bookings.length;
-        out.push(`INSERT INTO bookings (member_id, trainer_id, starts_at, ends_at, status, member_note, trainer_note, cancelled_at, cancelled_by, created_at) VALUES
-${rows(s.bookings.map((b) => [member.id, b.trainerId, v(b.startsAt), v(b.endsAt), v(b.status), v(b.memberNote), v(b.trainerNote), v(b.cancelledAt), b.cancelledBy ?? 'NULL', v(b.createdAt)]))};`);
+        paymentCount += s.bookings.length;
+        out.push(`INSERT INTO bookings (booking_id, member_id, trainer_id, starts_at, ends_at, status, price_krw, member_note, trainer_note, cancelled_at, cancelled_by, created_at) VALUES
+${rows(s.bookings.map((b) => [b.id, member.id, b.trainerId, v(b.startsAt), v(b.endsAt), v(b.status), b.price, v(b.memberNote), v(b.trainerNote), v(b.cancelledAt), b.cancelledBy ?? 'NULL', v(b.createdAt)]))};`);
+        out.push(`INSERT INTO payments (booking_id, amount_krw, method, status, paid_at, reference, recorded_by, created_at) VALUES
+${rows(s.bookings.map(({ id, payment: p }) => [id, p.amount, v(p.method), v(p.status), v(p.paidAt), v(p.reference), p.recordedBy, v(p.paidAt)]))};`);
       }
       if (s.cancelledAt) {
         out.push(`UPDATE subscriptions SET cancelled_at = ${v(s.cancelledAt)} WHERE subscription_id = ${s.id};`);

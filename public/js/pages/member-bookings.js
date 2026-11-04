@@ -39,7 +39,7 @@ $('#list').addEventListener('click', async (event) => {
   if (!btn) return;
   const ok = await confirmDialog({
     title: 'Cancel this session?',
-    body: 'The session goes back into your monthly quota.',
+    body: 'You get a full refund of what you paid for it.',
     confirmText: 'Cancel session',
     variant: 'danger',
   });

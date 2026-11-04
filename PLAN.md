@@ -24,7 +24,7 @@ Supporting material in the repo: SQL scripts (`db/`), design notes (`docs/`), an
 | 8 | Currency | KRW (whole won, no decimals) |
 | 9 | Roles | `users` (login) → `roles` lookup FK. `members` and `trainers` are 1:1 profile tables sharing the user's PK |
 | 10 | Booking model | Trainers set **weekly working hours**. Members book a **1-on-1 session** (30/60/90 min) at any free start time inside those hours |
-| 11 | Plans | Duration (months) + price (KRW) + personal-training (PT) **sessions per month** quota |
+| 11 | Plans | ~~Duration + price + PT quota~~ → **changed 2026-11-04**: gym access only, 1 / 3 / 6 / 12 months (see below) |
 | 12 | DB login | User starts MySQL, runs `scripts/setup-mysql.sh`, types the root password. A dedicated `gym_app` user is created |
 | 13 | Payments | Admin records desk payments (cash/card). Members can do a **simulated** online checkout. Status: `pending / paid / failed / refunded` |
 | 14 | Subscription status | **Derived** from dates + payments (`v_subscription_status`). Stored only: `cancelled_at`, plus a `subscription_freezes` history table |
@@ -33,14 +33,25 @@ Supporting material in the repo: SQL scripts (`db/`), design notes (`docs/`), an
 | 17 | Sign-up | Members self-register. Admins create trainers and admins. One admin is seeded |
 | 18 | Reports | Active memberships, collected revenue, trainer bookings, **monthly revenue trend (12 mo)**, **expiring soon (7/30 days)** |
 | 19 | DB showcase | **Views** + **Triggers** |
-| 20 | Testing / data | Jest + Supertest API tests, a SQL rule-proof script, and medium seed data (~60 members, 6 trainers, 5 plans, 12 months of history) |
+| 20 | Testing / data | Jest + Supertest API tests, a SQL rule-proof script, and medium seed data (~60 members, 6 trainers, 4 plans, 12 months of history) |
+
+## Changes requested on 2026-11-04
+
+| Topic | New decision |
+|---|---|
+| No free users | Sign-up is three steps: details → choose a membership → pay online (demo). The user, member profile, subscription and payment are created in **one transaction**, so a declined card creates nothing. The desk's "New member" also requires a plan and a desk payment |
+| Memberships | **Gym access only**: 1 Month ₩70,000 · 3 Months ₩189,000 · 6 Months ₩342,000 · 1 Year ₩600,000. `membership_plans.sessions_per_month` removed |
+| Personal training | Separate from the membership and **paid per session**: any member with an active, paid membership books any trainer, with no monthly limit. Price = `trainers.hourly_rate_krw` × length / 60, rounded to ₩1,000, stored in `bookings.price_krw` (filled by trigger). The session is paid online when booked (or at the desk when the desk books it); cancelling refunds it automatically (trigger) |
+| Payments | A payment belongs to a subscription **or** a booking (`ck_payments_target`); revenue reports split memberships and training |
+| Online purchases | Buying or renewing online is one step (created only when paid). Only desk sales can be left awaiting payment (e.g. bank transfer); members can pay those online |
+| Rules | R5 changed from "monthly PT quota" to "session price from the trainer's rate + refund on cancel"; R9 covers both kinds of payment |
 
 ## System rules (from the proposal)
 
 - **R1** A member can book only when an **active, fully-paid, non-frozen** subscription covers the session date.
 - **R2** No **overlapping** sessions for a trainer. **R3** No overlapping sessions for a member.
 - **R4** A session must fall inside the trainer's weekly **availability**.
-- **R5** Monthly PT **quota** from the plan (`sessions_per_month`).
+- **R5** Training sessions are paid per booking: price from the trainer's hourly rate; cancelling refunds it (changed 2026-11-04; was a monthly PT quota).
 - **R6** A member's subscriptions must not overlap in time (renewals start after the current one ends).
 - **R7** Role-based access: members see only their own data, trainers see only their own sessions and members, admins see everything.
 

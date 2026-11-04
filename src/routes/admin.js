@@ -79,6 +79,13 @@ router.get('/members/:id', async (req, res) => {
   res.json({ profile, subscriptions: subs, bookings: recentBookings, payments: memberPayments, freezes, usage });
 });
 
+// Money taken at the front desk: always paid on the spot.
+const deskPaymentSchema = v.z.object({
+  method: v.z.enum(['cash', 'card', 'bank_transfer']),
+  reference: v.optionalText(100),
+});
+const deskCharge = ({ method, reference }) => () => ({ method, reference, status: 'paid', paidAt: time.now() });
+
 const newMemberSchema = v.z.object({
   email: v.email,
   password: v.password,
@@ -88,11 +95,16 @@ const newMemberSchema = v.z.object({
   dateOfBirth: v.optionalDate,
   emergencyContactName: v.optionalText(100),
   emergencyContactPhone: v.phone,
+  planId: v.id,
+  payment: deskPaymentSchema,
 });
 
+// No free members: the desk enrolls a person together with a paid plan.
 router.post('/members', async (req, res) => {
-  const data = v.validate(newMemberSchema, req.body);
-  const userId = await users.createUser({ role: 'member', ...data, profile: data });
+  const { planId, payment, ...person } = v.validate(newMemberSchema, req.body);
+  const userId = await users.createMemberWithPlan({
+    person, planId, charge: deskCharge(payment), createdBy: req.user.userId,
+  });
   res.status(201).json(await users.profile(userId));
 });
 
@@ -107,6 +119,7 @@ const editPersonSchema = v.z.object({
   emergencyContactPhone: v.phone,
   specialization: v.z.string().trim().min(1).max(100).optional(),
   bio: v.optionalText(500),
+  hourlyRateKrw: v.money.optional(),
   hiredOn: v.date.optional(),
 });
 
@@ -133,7 +146,7 @@ router.patch('/members/:id', async (req, res) => {
 // =====================================================================
 router.get('/trainers', async (req, res) => {
   res.json(await select(
-    `SELECT s.*, u.email, u.phone, u.is_active, t.hired_on,
+    `SELECT s.*, u.email, u.phone, u.is_active, t.hired_on, t.hourly_rate_krw,
             (SELECT COUNT(*) FROM trainer_availability a WHERE a.trainer_id = t.trainer_id) AS windows
      FROM v_trainer_booking_stats s
      JOIN trainers t ON t.trainer_id = s.trainer_id
@@ -162,6 +175,7 @@ const newTrainerSchema = v.z.object({
   phone: v.phone,
   specialization: v.z.string().trim().min(1, 'Required').max(100),
   bio: v.optionalText(500),
+  hourlyRateKrw: v.money.optional(),
   hiredOn: v.optionalDate,
 });
 
@@ -177,7 +191,7 @@ router.patch('/trainers/:id', async (req, res) => {
   const data = v.validate(editPersonSchema, req.body);
   await users.updateUser(trainerId, {
     account: pick(data, req.body, ['firstName', 'lastName', 'email', 'phone', 'isActive']),
-    profile: pick(data, req.body, ['specialization', 'bio', 'hiredOn']),
+    profile: pick(data, req.body, ['specialization', 'bio', 'hourlyRateKrw', 'hiredOn']),
   });
   res.json(await users.profile(trainerId));
 });
@@ -207,7 +221,7 @@ router.get('/plans', async (req, res) => {
             (SELECT COUNT(*) FROM v_subscription_status v WHERE v.plan_id = p.plan_id AND v.status IN ('active', 'frozen')) AS active_members,
             (SELECT COUNT(*) FROM subscriptions s WHERE s.plan_id = p.plan_id) AS times_sold
      FROM membership_plans p
-     ORDER BY p.is_active DESC, p.price_krw`,
+     ORDER BY p.is_active DESC, p.duration_months`,
   ));
 });
 
@@ -216,7 +230,6 @@ const planSchema = v.z.object({
   description: v.optionalText(255),
   durationMonths: v.z.coerce.number().int().min(1).max(24),
   priceKrw: v.money,
-  sessionsPerMonth: v.z.coerce.number().int().min(0).max(30),
   isActive: v.z.boolean().optional(),
 });
 
@@ -332,6 +345,7 @@ router.delete('/freezes/:id', async (req, res) => {
 router.get('/payments', async (req, res) => {
   const query = v.validate(v.z.object({
     status: v.z.enum(['pending', 'paid', 'failed', 'refunded']).optional(),
+    kind: v.z.enum(['membership', 'training']).optional(),
     from: v.date.optional(),
     to: v.date.optional(),
     search: v.z.string().trim().optional(),
@@ -339,6 +353,7 @@ router.get('/payments', async (req, res) => {
   res.json(await payments.listPayments(query));
 });
 
+// A desk payment towards a membership (session payments come with the booking).
 const paymentSchema = v.z.object({
   subscriptionId: v.id,
   amountKrw: v.money,
@@ -390,12 +405,16 @@ const adminBookingSchema = v.z.object({
   startsAt: v.dateTime,
   duration: v.z.coerce.number().int().default(60),
   memberNote: v.optionalText(255),
+  payment: deskPaymentSchema,
 });
 
-// The desk may book at short notice (no lead-time policy), never in the past.
+// The desk may book at short notice (no lead-time policy), never in the past,
+// and takes the session's payment at the same time.
 router.post('/bookings', async (req, res) => {
-  const data = v.validate(adminBookingSchema, req.body);
-  res.status(201).json(await bookings.createBooking({ ...data, enforcePolicy: false }));
+  const { payment, ...data } = v.validate(adminBookingSchema, req.body);
+  res.status(201).json(await bookings.createBooking({
+    ...data, enforcePolicy: false, charge: deskCharge(payment), recordedBy: req.user.userId,
+  }));
 });
 
 router.post('/bookings/:id/cancel', async (req, res) => {

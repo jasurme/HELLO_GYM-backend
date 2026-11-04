@@ -1,6 +1,6 @@
 import {
   api, initPage, html, render, toast, showError, avatar, emptyState, fmtDate, fmtRange, isoDate, todayIso,
-  busy, modal, queryParam, $, $$,
+  busy, modal, queryParam, krw, $, $$,
 } from '../app.js';
 
 await initPage({ role: 'member' });
@@ -19,11 +19,12 @@ const state = {
   date: isoDate(new Date(Date.now() + 86400000)),
   duration: 60,
   slot: null,
+  price: null,
 };
 
 render('#page', html`
   <h1 class="page-title h3 mb-1">Book a personal-training session</h1>
-  <p class="page-subtitle mb-4">Choose a trainer, a day and a length, then pick a free time.</p>
+  <p class="page-subtitle mb-4">Choose a trainer, a day and a length, then pick a free time. Each session is paid when you book it.</p>
   <div class="row g-4">
     <div class="col-lg-4">
       <div class="card">
@@ -34,7 +35,7 @@ render('#page', html`
               ${avatar(t.name, t.trainerId)}
               <span class="lh-sm text-start"><span class="fw-semibold d-block">${t.name}</span>
                 <span class="small text-brand">${t.specialization}</span><br>
-                <span class="small text-secondary">${[...new Set(t.hours.map((h) => h.dayName.slice(0, 3)))].join(' · ')}</span></span>
+                <span class="small text-secondary">${krw(t.hourlyRateKrw)}/hour · ${[...new Set(t.hours.map((h) => h.dayName.slice(0, 3)))].join(' · ')}</span></span>
             </button>`)}
         </div>
       </div>
@@ -65,7 +66,7 @@ render('#page', html`
       </div>
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
-          <span>3. Time</span><span class="small text-secondary" id="quotaInfo"></span>
+          <span>3. Time</span><span class="small fw-semibold text-brand" id="priceInfo"></span>
         </div>
         <div class="card-body" id="slots"></div>
       </div>
@@ -74,16 +75,17 @@ render('#page', html`
 
   <div class="modal fade" id="confirmModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
-      <div class="modal-header"><h5 class="modal-title">Confirm your session</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-shield-lock me-2 text-brand"></i>Pay and book</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body">
         <div id="confirmSummary" class="mb-3"></div>
         <label class="form-label" for="memberNote">Note for the trainer <span class="text-secondary small">(optional)</span></label>
         <textarea class="form-control" id="memberNote" rows="2" maxlength="255" placeholder="e.g. focus on lower back"></textarea>
-        <div class="form-text">You can cancel online up to 12 hours before the session.</div>
+        <div class="form-text">Cancel online up to 12 hours before and you get a full refund.</div>
+        <div class="alert alert-info small py-2 mt-3 mb-0"><i class="bi bi-info-circle me-1"></i>Demo checkout: no real card is charged.</div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-light" data-bs-dismiss="modal">Back</button>
-        <button class="btn btn-primary" id="bookBtn"><i class="bi bi-check2 me-1"></i>Book session</button>
+      <div class="modal-footer justify-content-between">
+        <button class="btn btn-link text-danger px-0" id="declineBtn">Simulate a declined card</button>
+        <button class="btn btn-primary" id="bookBtn"><i class="bi bi-lock-fill me-1"></i>Pay and book</button>
       </div>
     </div></div>
   </div>`);
@@ -100,7 +102,8 @@ async function loadSlots() {
   try {
     const data = await api(`/member/trainers/${state.trainerId}/slots`, { query: { date: state.date, duration: state.duration } });
     const e = data.eligibility;
-    $('#quotaInfo').textContent = e.quota ? `${e.used} of ${e.quota} sessions used in ${e.month}` : '';
+    state.price = data.priceKrw;
+    $('#priceInfo').textContent = `${krw(data.priceKrw)} per ${data.duration}-minute session`;
 
     if (!e.eligible) {
       render('#slots', html`<div class="alert alert-warning mb-0 d-flex gap-2 align-items-center">
@@ -161,14 +164,16 @@ $('#slots').addEventListener('click', (event) => {
   state.slot = btn.dataset.slot;
   render('#confirmSummary', html`<div class="d-flex gap-3 align-items-center p-3 rounded bg-brand-soft">
     ${avatar(trainer.name, trainer.trainerId)}
-    <div><div class="fw-semibold">${fmtRange(`${state.date} ${state.slot}`, `${state.date} ${btn.dataset.end}`)}</div>
-      <div class="small">${state.duration} minutes with ${trainer.name} · ${trainer.specialization}</div></div></div>`);
+    <div class="flex-grow-1"><div class="fw-semibold">${fmtRange(`${state.date} ${state.slot}`, `${state.date} ${btn.dataset.end}`)}</div>
+      <div class="small">${state.duration} minutes with ${trainer.name} · ${trainer.specialization}</div></div>
+    <div class="fs-5 fw-bold">${krw(state.price)}</div></div>`);
+  $('#bookBtn').innerHTML = `<i class="bi bi-lock-fill me-1"></i>Pay ${krw(state.price)} and book`;
   $('#memberNote').value = '';
   modal('#confirmModal').show();
 });
 
-$('#bookBtn').addEventListener('click', async (event) => {
-  await busy(event.currentTarget, async () => {
+async function book(simulateFailure, button) {
+  await busy(button, async () => {
     try {
       const s = await api('/member/bookings', {
         method: 'POST',
@@ -177,10 +182,11 @@ $('#bookBtn').addEventListener('click', async (event) => {
           startsAt: `${state.date} ${state.slot}`,
           duration: state.duration,
           memberNote: $('#memberNote').value.trim() || null,
+          simulateFailure,
         },
       });
       modal('#confirmModal').hide();
-      toast(`Booked ${fmtRange(s.startsAt, s.endsAt)} with ${s.trainerName}`);
+      toast(`Paid ${krw(s.priceKrw)} and booked ${fmtRange(s.startsAt, s.endsAt)} with ${s.trainerName}`);
       await loadSlots();
     } catch (err) {
       modal('#confirmModal').hide();
@@ -188,6 +194,8 @@ $('#bookBtn').addEventListener('click', async (event) => {
       await loadSlots();
     }
   });
-});
+}
+$('#bookBtn').addEventListener('click', (e) => book(false, e.currentTarget));
+$('#declineBtn').addEventListener('click', (e) => book(true, e.currentTarget));
 
 await loadSlots();

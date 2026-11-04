@@ -5,6 +5,11 @@ import {
 
 const field = (label, input, hint = '') => html`<div class="mb-3"><label class="form-label">${label}</label>${input}${hint ? html`<div class="form-text">${hint}</div>` : ''}</div>`;
 
+// Method + receipt fields for money taken at the desk (named method / reference).
+export const deskPaymentFields = () => html`
+  <div class="col-sm-6">${field('Payment method', html`<select class="form-select" name="method"><option value="card">Card</option><option value="cash">Cash</option><option value="bank_transfer">Bank transfer</option></select>`)}</div>
+  <div class="col-sm-6">${field('Receipt / reference', html`<input class="form-control" name="reference" maxlength="100" placeholder="optional">`)}</div>`;
+
 // Sell a plan to a member, optionally taking payment at the desk.
 export async function sellPlanDialog(memberId, { onDone } = {}) {
   const plans = await api('/plans');
@@ -86,7 +91,8 @@ export function freezeDialog(sub, { onDone } = {}) {
   });
 }
 
-// Book a session on a member's behalf (no lead-time policy for the desk).
+// Book a paid session on a member's behalf and take the payment at the desk
+// (no lead-time policy for the desk).
 export async function bookForMemberDialog({ memberId = null, onDone } = {}) {
   const [trainers, members] = await Promise.all([
     api('/trainers'),
@@ -94,25 +100,32 @@ export async function bookForMemberDialog({ memberId = null, onDone } = {}) {
   ]);
   const tomorrow = isoDate(new Date(Date.now() + 86400000));
   const { form } = formModal({
-    title: 'Book a session for a member',
-    submitText: 'Book session',
+    title: 'Book a training session for a member',
+    submitText: 'Take payment and book',
     size: 'modal-lg',
     body: html`
       <div class="row g-3">
         ${memberId ? '' : html`<div class="col-12">${field('Member', html`<select class="form-select" name="memberId">${members.map((m) => html`<option value="${m.memberId}">${m.firstName} ${m.lastName} · ${m.planName}</option>`)}</select>`)}</div>`}
-        <div class="col-sm-5">${field('Trainer', html`<select class="form-select" name="trainerId">${trainers.map((t) => html`<option value="${t.trainerId}">${t.name} · ${t.specialization}</option>`)}</select>`)}</div>
+        <div class="col-sm-5">${field('Trainer', html`<select class="form-select" name="trainerId">${trainers.map((t) => html`<option value="${t.trainerId}">${t.name} · ${krw(t.hourlyRateKrw)}/h</option>`)}</select>`)}</div>
         <div class="col-sm-4">${field('Day', html`<input type="date" class="form-control" name="date" min="${todayIso()}" value="${tomorrow}">`)}</div>
         <div class="col-sm-3">${field('Length', html`<select class="form-select" name="duration"><option value="30">30 min</option><option value="60" selected>60 min</option><option value="90">90 min</option></select>`)}</div>
       </div>
       <input type="hidden" name="slot">
-      <div id="slotArea" class="mt-2"></div>`,
+      <div id="slotArea" class="mt-2 mb-3"></div>
+      <div class="row g-3">${deskPaymentFields()}</div>`,
     onSubmit: async (v) => {
       if (!v.slot) throw new ApiError('Pick a time first');
       const s = await api('/admin/bookings', {
         method: 'POST',
-        body: { memberId: Number(memberId || v.memberId), trainerId: Number(v.trainerId), startsAt: `${v.date} ${v.slot}`, duration: Number(v.duration) },
+        body: {
+          memberId: Number(memberId || v.memberId),
+          trainerId: Number(v.trainerId),
+          startsAt: `${v.date} ${v.slot}`,
+          duration: Number(v.duration),
+          payment: { method: v.method, reference: v.reference },
+        },
       });
-      toast(`Booked ${s.memberName} with ${s.trainerName}`);
+      toast(`Booked ${s.memberName} with ${s.trainerName} · ${krw(s.priceKrw)} paid`);
       await onDone?.(s);
     },
   });
@@ -137,7 +150,7 @@ export async function bookForMemberDialog({ memberId = null, onDone } = {}) {
       }
       const free = data.slots.filter((s) => s.available || s.reason === 'too_soon');
       render(area, free.length ? html`
-        ${e ? html`<p class="small text-secondary">${e.used} of ${e.quota} sessions used in ${e.month}</p>` : ''}
+        <p class="small text-secondary">Price: <strong class="text-body">${krw(data.priceKrw)}</strong> for ${data.duration} minutes with ${data.trainer.name}</p>
         <div class="slot-grid">${data.slots.map((s) => html`<button type="button" class="btn btn-sm ${s.available || s.reason === 'too_soon' ? 'btn-outline-primary' : 'btn-light text-secondary unavailable'}"
           data-slot="${s.time}" ${s.available || s.reason === 'too_soon' ? '' : 'disabled'}>${s.time}</button>`)}</div>`
         : emptyState('calendar-x', data.windows.length ? 'No free times on this day.' : `${data.trainer.name} does not work on this day.`));

@@ -18,21 +18,31 @@ function draw(canvas, config) {
   return chart;
 }
 
-// Monthly revenue bars (collected) with refunds as a second series.
+// Collected revenue per month, stacked: memberships + personal training.
 export function revenueChart(canvas, trend) {
   return draw(canvas, {
     type: 'bar',
     data: {
       labels: trend.map((r) => monthLabel(r.month)),
       datasets: [
-        { label: 'Collected', data: trend.map((r) => r.revenueKrw), backgroundColor: BRAND, borderRadius: 6, maxBarThickness: 36 },
-        { label: 'Refunded', data: trend.map((r) => r.refundedKrw), backgroundColor: '#fca5a5', borderRadius: 6, maxBarThickness: 36 },
+        { label: 'Memberships', data: trend.map((r) => r.membershipKrw), backgroundColor: BRAND, maxBarThickness: 36 },
+        { label: 'Personal training', data: trend.map((r) => r.trainingKrw), backgroundColor: '#10b981', borderRadius: 6, maxBarThickness: 36 },
       ],
     },
     options: {
       maintainAspectRatio: false,
-      plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${krw(c.raw)}` } } },
-      scales: { y: { ticks: { callback: compactKrw }, grid: { color: '#eef0f4' } }, x: { grid: { display: false } } },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: (c) => `${c.dataset.label}: ${krw(c.raw)}`,
+            footer: (items) => `Total: ${krw(items.reduce((sum, i) => sum + i.raw, 0))}`,
+          },
+        },
+      },
+      scales: {
+        y: { stacked: true, ticks: { callback: compactKrw }, grid: { color: '#eef0f4' } },
+        x: { stacked: true, grid: { display: false } },
+      },
     },
   });
 }

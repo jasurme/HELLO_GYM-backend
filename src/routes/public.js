@@ -5,20 +5,20 @@ const { DAY_NAMES } = require('../services/availability');
 
 const router = express.Router();
 
-// Plans currently on sale (landing page, sign-up, renewal).
+// Gym-access plans currently on sale (landing page, sign-up, renewal).
 router.get('/plans', async (req, res) => {
   const plans = await Plan.findAll({
     where: { isActive: true },
-    attributes: ['planId', 'planName', 'description', 'durationMonths', 'priceKrw', 'sessionsPerMonth'],
-    order: [['priceKrw', 'ASC']],
+    attributes: ['planId', 'planName', 'description', 'durationMonths', 'priceKrw'],
+    order: [['durationMonths', 'ASC']],
   });
   res.json(plans);
 });
 
-// Active trainers with their weekly hours.
+// Active trainers with their hourly rate and weekly hours.
 router.get('/trainers', async (req, res) => {
   const rows = await select(
-    `SELECT t.trainer_id, u.first_name, u.last_name, t.specialization, t.bio,
+    `SELECT t.trainer_id, u.first_name, u.last_name, t.specialization, t.bio, t.hourly_rate_krw,
             a.day_of_week, TIME_FORMAT(a.start_time, '%H:%i') AS start_time, TIME_FORMAT(a.end_time, '%H:%i') AS end_time
      FROM trainers t
      JOIN users u ON u.user_id = t.trainer_id AND u.is_active
@@ -33,6 +33,7 @@ router.get('/trainers', async (req, res) => {
         name: `${r.firstName} ${r.lastName}`,
         specialization: r.specialization,
         bio: r.bio,
+        hourlyRateKrw: r.hourlyRateKrw,
         hours: [],
       });
     }

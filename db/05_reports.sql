@@ -22,40 +22,45 @@ ORDER BY FIELD(status, 'active', 'frozen', 'upcoming', 'pending_payment');
 SELECT
   p.plan_name,
   p.duration_months,
-  p.sessions_per_month,
+  p.price_krw,
   COUNT(a.subscription_id)                                        AS active_members,
   ROUND(100 * COUNT(a.subscription_id) / SUM(COUNT(a.subscription_id)) OVER (), 1) AS pct_of_active
 FROM membership_plans p
 LEFT JOIN v_active_subscriptions a ON a.plan_id = p.plan_id
-GROUP BY p.plan_id, p.plan_name, p.duration_months, p.sessions_per_month
+GROUP BY p.plan_id, p.plan_name, p.duration_months, p.price_krw
 ORDER BY active_members DESC;
 
 -- ---------------------------------------------------------------------
--- Report 2: Collected subscription revenue
+-- Report 2: Collected revenue: memberships and personal training
 -- ---------------------------------------------------------------------
 
--- 2a. Headline figures: this month, this year, all time
+-- 2a. Headline figures: this month, this year (and its split), all time
 -- @name revenue_headline
 SELECT
   SUM(CASE WHEN paid_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN amount_krw ELSE 0 END) AS this_month_krw,
   SUM(CASE WHEN paid_at >= DATE_FORMAT(CURDATE(), '%Y-01-01') THEN amount_krw ELSE 0 END) AS this_year_krw,
+  SUM(CASE WHEN paid_at >= DATE_FORMAT(CURDATE(), '%Y-01-01') AND subscription_id IS NOT NULL
+           THEN amount_krw ELSE 0 END)                                                   AS this_year_membership_krw,
+  SUM(CASE WHEN paid_at >= DATE_FORMAT(CURDATE(), '%Y-01-01') AND booking_id IS NOT NULL
+           THEN amount_krw ELSE 0 END)                                                   AS this_year_training_krw,
   SUM(amount_krw)                                                                        AS all_time_krw
 FROM payments
 WHERE status = 'paid';
 
--- 2b. Revenue by plan and payment method (last 12 months)
--- @name revenue_by_plan_method
+-- 2b. Revenue by product (each plan, or personal training) and payment
+--     method, last 12 months, with subtotals and a grand total
+-- @name revenue_by_product_method
 SELECT
-  mp.plan_name,
+  COALESCE(mp.plan_name, 'Personal training') AS product,
   pay.method,
   COUNT(*)            AS payments,
   SUM(pay.amount_krw) AS revenue_krw
 FROM payments pay
-JOIN subscriptions s     ON s.subscription_id = pay.subscription_id
-JOIN membership_plans mp ON mp.plan_id = s.plan_id
+LEFT JOIN subscriptions s     ON s.subscription_id = pay.subscription_id
+LEFT JOIN membership_plans mp ON mp.plan_id = s.plan_id
 WHERE pay.status = 'paid'
   AND pay.paid_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') - INTERVAL 11 MONTH
-GROUP BY mp.plan_name, pay.method WITH ROLLUP;
+GROUP BY COALESCE(mp.plan_name, 'Personal training'), pay.method WITH ROLLUP;
 
 -- 2c. Outstanding balances (sold but not fully paid)
 -- @name outstanding_balances
@@ -74,7 +79,7 @@ SELECT *
 FROM v_trainer_booking_stats
 ORDER BY completed DESC;
 
--- 3b. Sessions per trainer in a date range (here: the last 30 days)
+-- 3b. Sessions and paid revenue per trainer in a date range (here: the last 30 days)
 -- @name trainer_last_30_days
 SELECT
   trainer_name,
@@ -82,7 +87,8 @@ SELECT
   SUM(status = 'completed')                         AS completed,
   SUM(status = 'no_show')                           AS no_shows,
   ROUND(100 * SUM(status = 'no_show') / NULLIF(SUM(status IN ('completed', 'no_show')), 0), 1) AS no_show_pct,
-  COUNT(DISTINCT member_id)                         AS members
+  COUNT(DISTINCT member_id)                         AS members,
+  SUM(CASE WHEN payment_status = 'paid' THEN price_krw ELSE 0 END) AS revenue_krw
 FROM v_trainer_schedule
 WHERE status <> 'cancelled'
   AND starts_at >= NOW() - INTERVAL 30 DAY
@@ -104,6 +110,8 @@ WITH RECURSIVE months AS (
 SELECT
   DATE_FORMAT(m.month_start, '%Y-%m')  AS month,
   COALESCE(r.payments, 0)              AS payments,
+  COALESCE(r.membership_krw, 0)        AS membership_krw,
+  COALESCE(r.training_krw, 0)          AS training_krw,
   COALESCE(r.revenue_krw, 0)           AS revenue_krw,
   COALESCE(r.refunded_krw, 0)          AS refunded_krw
 FROM months m

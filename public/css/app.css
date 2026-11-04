@@ -180,3 +180,34 @@ main { flex: 1; }
 .chart-box { position: relative; height: 280px; }
 footer.app-footer { color: var(--bs-secondary-color); font-size: 0.85rem; }
 .font-tabular { font-variant-numeric: tabular-nums; }
+
+/* ---- Sign-up wizard -------------------------------------------------- */
+.wizard-card { max-width: 760px; }
+.wizard-steps { display: flex; gap: 0.5rem; list-style: none; padding: 0; counter-reset: none; }
+.wizard-steps li {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--bs-secondary-color);
+  padding-bottom: 0.6rem;
+  border-bottom: 3px solid #e5e7f0;
+}
+.wizard-steps li span {
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  font-weight: 700;
+  background: #e5e7f0;
+  color: var(--bs-secondary-color);
+}
+.wizard-steps li.active { color: var(--brand-dark); font-weight: 600; border-bottom-color: var(--brand); }
+.wizard-steps li.active span { background: var(--brand); color: #fff; }
+.wizard-steps li.done { color: var(--brand-dark); border-bottom-color: var(--accent); }
+.wizard-steps li.done span { background: var(--accent); color: #fff; }
+.plan-choice { cursor: pointer; border: 2px solid transparent; transition: border-color 0.1s ease; }
+.plan-choice:hover { border-color: rgba(var(--brand-rgb), 0.35); }
+.plan-choice.selected { border-color: var(--brand); background: var(--brand-soft); }

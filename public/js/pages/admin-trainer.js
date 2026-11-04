@@ -1,5 +1,5 @@
 import {
-  api, initPage, html, render, emptyState, formModal, toast, showError, confirmDialog, fmtDate, queryParam, DAY_NAMES, $,
+  api, initPage, html, render, emptyState, formModal, toast, showError, confirmDialog, fmtDate, queryParam, DAY_NAMES, krw, $,
 } from '../app.js';
 import { sessionList, personCell } from '../components.js';
 
@@ -29,7 +29,7 @@ async function load() {
     </div>
     ${p.isActive ? '' : html`<div class="alert alert-secondary">Deactivated: hidden from members, cannot log in or be booked.</div>`}
     <div class="row g-3 mb-4">
-      ${[['Upcoming', s.upcoming], ['Completed', s.completed], ['No-shows', s.noShows], ['Hours delivered', s.hoursDelivered], ['Members', s.distinctMembers]].map(([l, v]) => html`
+      ${[['Rate / hour', krw(p.trainer.hourlyRateKrw)], ['Upcoming', s.upcoming], ['Completed', s.completed], ['Hours delivered', s.hoursDelivered], ['Members', s.distinctMembers], ['PT revenue', krw(s.revenueKrw)]].map(([l, v]) => html`
         <div class="col"><div class="card kpi"><div class="kpi-value">${v}</div><div class="kpi-label">${l}</div></div></div>`)}
     </div>
     <div class="row g-4">
@@ -103,7 +103,8 @@ $('#page').addEventListener('click', async (event) => {
           <div class="col-sm-6"><label class="form-label">Email</label><input class="form-control" name="email" value="${p.email}"></div>
           <div class="col-sm-6"><label class="form-label">Phone</label><input class="form-control" name="phone" value="${p.phone || ''}"></div>
           <div class="col-sm-6"><label class="form-label">Specialization</label><input class="form-control" name="specialization" value="${p.trainer.specialization}"></div>
-          <div class="col-sm-6"><label class="form-label">Hired on</label><input class="form-control" type="date" name="hiredOn" value="${p.trainer.hiredOn}"></div>
+          <div class="col-sm-3"><label class="form-label">Rate / hour (KRW)</label><input class="form-control" type="number" name="hourlyRateKrw" min="1000" step="1000" value="${p.trainer.hourlyRateKrw}"></div>
+          <div class="col-sm-3"><label class="form-label">Hired on</label><input class="form-control" type="date" name="hiredOn" value="${p.trainer.hiredOn}"></div>
           <div class="col-12"><label class="form-label">Bio</label><textarea class="form-control" name="bio" rows="3" maxlength="500">${p.trainer.bio || ''}</textarea></div>
         </div>`,
         onSubmit: async (values) => {

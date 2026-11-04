@@ -16,13 +16,13 @@ const me = (req) => req.user.userId;
 router.get('/overview', async (req, res) => {
   const memberId = me(req);
   const { current, next } = await subscriptions.memberSubscriptions(memberId);
-  const [usage, upcoming, eligibility, unpaid] = await Promise.all([
-    current ? subscriptions.monthlyUsage(memberId, current.sessionsPerMonth) : null,
+  const [sessionsThisMonth, upcoming, eligibility, unpaid] = await Promise.all([
+    subscriptions.sessionsThisMonth(memberId),
     bookings.listBookings({ memberId, scope: 'upcoming', limit: 5 }),
     bookings.getEligibility(memberId, time.today()),
     subscriptions.listSubscriptions({ memberId, status: 'pending_payment' }),
   ]);
-  res.json({ current, next, usage, upcoming, eligibility, unpaid });
+  res.json({ current, next, sessionsThisMonth, upcoming, eligibility, unpaid });
 });
 
 // ---- Subscriptions & payments ---------------------------------------
@@ -34,25 +34,23 @@ router.get('/subscriptions/:id', async (req, res) => {
   res.json(await subscriptions.subscriptionDetail(v.validate(v.id, req.params.id), { memberId: me(req) }));
 });
 
-// Buy or renew a plan: creates the subscription with a pending online payment.
+// Buy or renew a plan and pay online in one step (demo gateway);
+// { simulateFailure: true } plays a declined card and nothing is created.
 router.post('/subscriptions', async (req, res) => {
-  const { planId } = v.validate(v.z.object({ planId: v.id }), req.body);
-  const sub = await subscriptions.purchaseOnline(me(req), planId);
+  const { planId, simulateFailure } = v.validate(v.z.object({
+    planId: v.id,
+    simulateFailure: v.z.boolean().optional(),
+  }), req.body);
+  const sub = await subscriptions.purchaseOnline(me(req), planId, { simulateFailure });
   res.status(201).json(await subscriptions.subscriptionDetail(sub.subscriptionId));
 });
 
-// Simulated online checkout; { simulateFailure: true } demonstrates a decline.
+// Pay online for a membership the front desk left awaiting payment.
 router.post('/subscriptions/:id/checkout', async (req, res) => {
   const subscriptionId = v.validate(v.id, req.params.id);
   const { simulateFailure } = v.validate(v.z.object({ simulateFailure: v.z.boolean().optional() }), req.body);
   const { declined } = await subscriptions.checkout(me(req), subscriptionId, { simulateFailure });
   if (declined) throw new HttpError(402, 'The payment was declined (simulated). No money was taken. Please try again.');
-  res.json(await subscriptions.subscriptionDetail(subscriptionId));
-});
-
-router.post('/subscriptions/:id/cancel', async (req, res) => {
-  const subscriptionId = v.validate(v.id, req.params.id);
-  await subscriptions.cancelUnpaid(me(req), subscriptionId);
   res.json(await subscriptions.subscriptionDetail(subscriptionId));
 });
 
@@ -85,11 +83,18 @@ const bookingSchema = v.z.object({
   startsAt: v.dateTime,
   duration: v.z.coerce.number().int().default(60),
   memberNote: v.optionalText(255),
+  simulateFailure: v.z.boolean().optional(),
 });
 
+// Book a paid training session; it is paid online in the same step.
 router.post('/bookings', async (req, res) => {
-  const data = v.validate(bookingSchema, req.body);
-  res.status(201).json(await bookings.createBooking({ ...data, memberId: me(req) }));
+  const { simulateFailure, ...data } = v.validate(bookingSchema, req.body);
+  res.status(201).json(await bookings.createBooking({
+    ...data,
+    memberId: me(req),
+    recordedBy: me(req),
+    charge: () => subscriptions.chargeOnline({ simulateFailure }),
+  }));
 });
 
 router.post('/bookings/:id/cancel', async (req, res) => {

@@ -13,12 +13,15 @@ const SEED = {
   trainer: 'daniel.park@binaryfit.test',
   trainerId: 3,
   otherTrainerId: 6,               // Emily Jung, Mon–Fri 09–13 & 18–21
-  minji: 'minji.kim@binaryfit.test', // active Premium, 8 PT / month
-  joonho: 'joonho.lee@binaryfit.test', // expired
-  sara: 'sara.ahmed@binaryfit.test',   // unpaid
-  taeyang: 'taeyang.seo@binaryfit.test', // Basic, no PT
+  minji: 'minji.kim@binaryfit.test',     // active 6 Months, trains with Daniel
+  joonho: 'joonho.lee@binaryfit.test',   // expired
+  sara: 'sara.ahmed@binaryfit.test',     // joined and paid today
+  taeyang: 'taeyang.seo@binaryfit.test', // active; queued renewal awaiting bank transfer
   ethan: 'ethan.brooks@binaryfit.test',  // frozen
 };
+// Gym-access plans (see scripts/generate-seed.js) and trainer rates
+const PLANS = { month: 1, quarter: 2, half: 3, year: 4 };
+const RATES = { 3: 60000, 6: 50000 };
 
 async function loginAs(email, password = PASSWORD) {
   const agent = request.agent(app);
@@ -41,24 +44,22 @@ function futureWeekday(isoDay, minDaysAhead) {
   return isoDate(d);
 }
 
-// A new member with a paid subscription (default PT Quarterly, 4 PT / month),
-// created through the admin API. Returns the member's id and a logged-in agent.
-async function memberWithPlan(admin, { planId = 4, firstName = 'Test' } = {}) {
+// A new member enrolled at the desk with a paid membership starting today
+// (default 3 Months). Returns the member's id, the subscription and a
+// logged-in agent.
+async function memberWithPlan(admin, { planId = PLANS.quarter, firstName = 'Test' } = {}) {
   const email = uniqueEmail('member');
   const created = await admin.post('/api/admin/members').send({
-    email, password: PASSWORD, firstName, lastName: 'Member',
+    email, password: PASSWORD, firstName, lastName: 'Member', planId, payment: { method: 'card' },
   });
   if (created.status !== 201) throw new Error(`Create member failed: ${JSON.stringify(created.body)}`);
   const memberId = created.body.userId;
-  const plans = await admin.get('/api/admin/plans');
-  const plan = plans.body.find((p) => p.planId === planId);
-  const sub = await admin.post('/api/admin/subscriptions').send({
-    memberId, planId, payment: { amountKrw: plan.priceKrw, method: 'card' },
-  });
-  if (sub.status !== 201) throw new Error(`Sell plan failed: ${JSON.stringify(sub.body)}`);
-  return { memberId, email, subscription: sub.body, agent: await loginAs(email) };
+  const detail = await admin.get(`/api/admin/members/${memberId}`);
+  return { memberId, email, subscription: detail.body.subscriptions[0], agent: await loginAs(email) };
 }
 
 afterAll(() => sequelize.close());
 
-module.exports = { app, request, sequelize, SEED, PASSWORD, loginAs, uniqueEmail, futureWeekday, isoDate, memberWithPlan };
+module.exports = {
+  app, request, sequelize, SEED, PLANS, RATES, PASSWORD, loginAs, uniqueEmail, futureWeekday, isoDate, memberWithPlan,
+};

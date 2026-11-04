@@ -45,7 +45,8 @@ render('#page', html`
   <div class="row g-4 mb-4">
     <div class="col-lg-8"><div class="card h-100">
       <div class="card-header d-flex justify-content-between"><span>Revenue, last 12 months</span>
-        <span class="small text-secondary">This year: <strong>${krw(revenue.headline.thisYearKrw)}</strong></span></div>
+        <span class="small text-secondary">This year: <strong>${krw(revenue.headline.thisYearKrw)}</strong>
+          (training ${krw(revenue.headline.thisYearTrainingKrw)})</span></div>
       <div class="card-body"><div class="chart-box"><canvas id="revenueChart"></canvas></div></div>
     </div></div>
     <div class="col-lg-4"><div class="card h-100">
@@ -70,11 +71,11 @@ render('#page', html`
       <div class="card-header d-flex justify-content-between"><span><i class="bi bi-person-badge me-2 text-brand"></i>Trainer bookings, last 30 days</span>
         <a class="small" href="/admin/reports.html#trainers">Details</a></div>
       <div class="table-responsive"><table class="table align-middle mb-0">
-        <thead><tr><th>Trainer</th><th class="text-end">Sessions</th><th class="text-end">Hours</th><th class="text-end">No-show %</th><th class="text-end">Members</th></tr></thead>
+        <thead><tr><th>Trainer</th><th class="text-end">Sessions</th><th class="text-end">Hours</th><th class="text-end">No-show %</th><th class="text-end">Revenue</th></tr></thead>
         <tbody>${trainers.range.map((t) => html`<tr>
           <td><div class="fw-semibold">${t.trainerName}</div><div class="small text-secondary">${t.specialization}</div></td>
           <td class="text-end">${t.sessions}</td><td class="text-end">${t.hours}</td>
-          <td class="text-end">${t.noShowPct ?? '—'}</td><td class="text-end">${t.members}</td></tr>`)}</tbody>
+          <td class="text-end">${t.noShowPct ?? '—'}</td><td class="text-end font-tabular">${krw(t.revenueKrw)}</td></tr>`)}</tbody>
       </table></div>
     </div></div>
   </div>`);

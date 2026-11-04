@@ -10,13 +10,13 @@ The SQL source of truth is in [`db/`](../db). The normalization walkthrough is i
 | Role | `roles` | Lookup of access levels: admin, trainer, member |
 | User | `users` | One login per person (email, bcrypt hash, name, phone, active flag) |
 | Member | `members` | Member profile. **Subtype** of User (shared primary key) |
-| Trainer | `trainers` | Trainer profile. **Subtype** of User (shared primary key) |
-| Membership plan | `membership_plans` | Catalogue: duration, price, monthly personal-training quota |
+| Trainer | `trainers` | Trainer profile and hourly rate. **Subtype** of User (shared primary key) |
+| Membership plan | `membership_plans` | Catalogue of gym-access plans: duration and price (personal training is not part of a plan) |
 | Subscription | `subscriptions` | A member enrolled in a plan for a date range at an agreed price |
 | Subscription freeze | `subscription_freezes` | A pause in a subscription. Extends its end date |
-| Payment | `payments` | Money received (or attempted) for a subscription |
+| Payment | `payments` | Money received (or attempted) for a subscription **or** a training session |
 | Trainer availability | `trainer_availability` | Recurring weekly working hours of a trainer |
-| Booking | `bookings` | A 1-on-1 training session between a member and a trainer |
+| Booking | `bookings` | A paid 1-on-1 training session between a member and a trainer |
 
 ## 2. Entity-Relationship Diagram
 
@@ -27,7 +27,8 @@ erDiagram
     users ||--o| trainers : "is a"
     members ||--o{ subscriptions : "holds"
     membership_plans ||--o{ subscriptions : "is sold as"
-    subscriptions ||--o{ payments : "is paid by"
+    subscriptions |o--o{ payments : "is paid by"
+    bookings |o--o{ payments : "is paid by"
     subscriptions ||--o{ subscription_freezes : "is paused by"
     trainers ||--o{ trainer_availability : "works during"
     members ||--o{ bookings : "books"
@@ -63,6 +64,7 @@ erDiagram
         int trainer_id PK, FK
         varchar specialization
         varchar bio
+        int hourly_rate_krw
         date hired_on
     }
     membership_plans {
@@ -71,7 +73,6 @@ erDiagram
         varchar description
         tinyint duration_months
         int price_krw
-        tinyint sessions_per_month
         bool is_active
     }
     subscriptions {
@@ -95,6 +96,7 @@ erDiagram
     payments {
         int payment_id PK
         int subscription_id FK
+        int booking_id FK
         int amount_krw
         enum method
         enum status
@@ -116,6 +118,7 @@ erDiagram
         datetime starts_at
         datetime ends_at
         enum status
+        int price_krw
         varchar member_note
         varchar trainer_note
         datetime cancelled_at
@@ -134,6 +137,8 @@ erDiagram
 | members → subscriptions | 1 : N | History kept. Periods never overlap (R6) |
 | membership_plans → subscriptions | 1 : N | `ON DELETE RESTRICT`: a sold plan can be retired (`is_active = 0`) but not deleted |
 | subscriptions → payments | 1 : N | Installments, failed attempts and refunds are separate rows |
+| bookings → payments | 1 : N | A session is paid when booked; a cancellation refunds that payment |
+| payments → subscription **or** booking | exclusive arc | `ck_payments_target`: exactly one of the two FKs is set |
 | subscriptions → subscription_freezes | 1 : N | Each freeze extends `end_date` (trigger) |
 | trainers → trainer_availability | 1 : N | Weekly windows. Deleted with the trainer (`CASCADE`) |
 | members ↔ trainers via bookings | M : N | `bookings` is the associative entity with its own attributes |
@@ -176,6 +181,7 @@ Conventions: `INT UNSIGNED` surrogate keys, `utf8mb4`, InnoDB, money in whole **
 | trainer_id | INT UNSIGNED | no | PK, FK → users (CASCADE) | Same value as the user's id |
 | specialization | VARCHAR(100) | no | | e.g. "Strength & Conditioning" |
 | bio | VARCHAR(500) | yes | | Shown to members when booking |
+| hourly_rate_krw | INT UNSIGNED | no | 50000, CHECK > 0 | Personal-training price per hour (**current** rate) |
 | hired_on | DATE | no | CURRENT_DATE | |
 
 ### membership_plans
@@ -185,8 +191,7 @@ Conventions: `INT UNSIGNED` surrogate keys, `utf8mb4`, InnoDB, money in whole **
 | plan_name | VARCHAR(50) | no | UNIQUE | |
 | description | VARCHAR(255) | yes | | |
 | duration_months | TINYINT UNSIGNED | no | CHECK 1–24 | |
-| price_krw | INT UNSIGNED | no | CHECK > 0 | **Current** list price |
-| sessions_per_month | TINYINT UNSIGNED | no | 0, CHECK ≤ 30 | Personal-training quota (0 = gym only) |
+| price_krw | INT UNSIGNED | no | CHECK > 0 | **Current** list price of the gym-access plan |
 | is_active | BOOLEAN | no | TRUE | Still offered for sale |
 | created_at, updated_at | DATETIME | no | CURRENT_TIMESTAMP | |
 
@@ -219,7 +224,9 @@ Index `(member_id, start_date, end_date)` serves the overlap check (R6) and the 
 | Column | Type | Null | Key / Default | Description |
 |---|---|---|---|---|
 | payment_id | INT UNSIGNED | no | PK, AUTO_INCREMENT | |
-| subscription_id | INT UNSIGNED | no | FK → subscriptions (RESTRICT) | |
+| subscription_id | INT UNSIGNED | yes | FK → subscriptions (RESTRICT) | Set for a membership payment |
+| booking_id | INT UNSIGNED | yes | FK → bookings (RESTRICT) | Set for a training-session payment |
+| | | | CHECK `ck_payments_target` | Exactly one of subscription_id / booking_id |
 | amount_krw | INT UNSIGNED | no | CHECK > 0 | |
 | method | ENUM | no | cash, card, bank_transfer, online | |
 | status | ENUM | no | pending | pending → paid / failed. paid → refunded |
@@ -248,6 +255,7 @@ Index `(status, paid_at)` serves the revenue reports.
 | trainer_id | INT UNSIGNED | no | FK → trainers (RESTRICT) | |
 | starts_at, ends_at | DATETIME | no | CHECK: same day, 30/60/90 min, :00/:30 start | |
 | status | ENUM | no | booked | booked → completed / no_show / cancelled |
+| price_krw | INT UNSIGNED | no | filled by trigger | Price **agreed at booking**: trainer's rate × length, rounded to ₩1,000 |
 | member_note | VARCHAR(255) | yes | | Request from the member |
 | trainer_note | VARCHAR(255) | yes | | Written after the session |
 | cancelled_at | DATETIME | yes | CHECK set ⇔ cancelled | |
@@ -262,15 +270,15 @@ Database errors raised by triggers use `SQLSTATE 45000` with a message starting 
 
 | # | Rule | Database | App |
 |---|---|---|---|
-| R1 | Booking needs an active, fully-paid, non-frozen subscription on the session date | `assert_booking_rules` ← `trg_bookings_bi/bu` | booking service |
+| R1 | Booking a trainer needs an active, fully-paid, non-frozen membership on the session date (training happens in the gym) | `assert_booking_rules` ← `trg_bookings_bi/bu` | booking service |
 | R2 | A trainer has no overlapping sessions | same procedure + index | slot finder hides taken slots. Booking runs in a transaction with row locks |
 | R3 | A member has no overlapping sessions | same procedure + index | same |
 | R4 | Sessions fit the trainer's weekly hours | same procedure | slot finder |
-| R5 | Monthly personal-training quota from the plan | same procedure | quota shown on dashboard |
+| R5 | Sessions are paid per booking: the price is the trainer's hourly rate × length (rounded to ₩1,000) when none is given, and cancelling a session refunds its payment | `trg_bookings_bi` (price), `trg_bookings_au` (refund) | price shown with the slots; booking + payment in one transaction |
 | R6 | A member's (non-cancelled) subscriptions never overlap | `trg_subscriptions_bi/bu` | renewal starts after current end |
 | R7 | Role-based access (members/trainers see only their own data) | (FKs scope data) | `requireRole` middleware + query scoping |
 | R8 | Booking lifecycle: only `booked` changes. Complete/no-show only after start | `trg_bookings_bu` | members cancel ≥ 12 h ahead (app rule) |
-| R9 | Live payments ≤ agreed price. Lifecycle pending→paid/failed, paid→refunded | `assert_payment_within_price` ← `trg_payments_bi/bu` | payment forms |
+| R9 | A payment is for exactly one membership **or** session. Live payments ≤ its agreed price. Lifecycle pending→paid/failed, paid→refunded | `ck_payments_target`, `assert_payment_within_price` ← `trg_payments_bi/bu` | payment forms |
 | R10 | Freezes start inside the subscription, never overlap, no booked sessions inside. They extend `end_date` and cannot be edited | `trg_freezes_bi/ai/ad/bu` | admin freeze form |
 | R11 | A trainer's weekly windows never overlap | `trg_availability_bi/bu` | availability editor |
 | R12 | Profiles match the role. Inactive accounts cannot book. Roles of profiled users are fixed | `trg_members_bi`, `trg_trainers_bi`, `trg_users_bu`, procedure | login refuses inactive users |
@@ -278,9 +286,13 @@ Database errors raised by triggers use `SQLSTATE 45000` with a message starting 
 Automatic behaviour (triggers):
 - A freeze **extends** the subscription's `end_date` by its length. Deleting the freeze gives the days back.
 - Cancelling a subscription **cancels** the member's future sessions it covered.
+- A new booking without a price gets the trainer's rate × length (R5).
+- Cancelling a session **refunds** its paid payment (and voids a pending one) (R5).
 - `paid_at` / `cancelled_at` are stamped when a status changes to paid / cancelled.
 
-All rules are demonstrated in [`db/06_rule_tests.sql`](../db/06_rule_tests.sql). `npm run db:check-rules` runs it and confirms all 25 rejections.
+No free users: sign-up (and the desk's "New member") creates the user, the member profile, the subscription and its payment in **one transaction**. A declined card rolls everything back, so every member has a paid membership.
+
+All rules are demonstrated in [`db/06_rule_tests.sql`](../db/06_rule_tests.sql). `npm run db:check-rules` runs it and confirms all 26 rejections.
 
 ## 5. Views (derived data)
 
@@ -289,10 +301,10 @@ All rules are demonstrated in [`db/06_rule_tests.sql`](../db/06_rule_tests.sql).
 | `v_subscription_status` | Derived status (`active`, `expired`, `upcoming`, `frozen`, `pending_payment`, `cancelled`), paid total, balance, days left |
 | `v_active_subscriptions` | Active-membership counts, booking eligibility lists |
 | `v_expiring_subscriptions` | "Expiring soon" report (≤ 30 days), with whether the member already renewed |
-| `v_trainer_schedule` | Trainer and member schedules with names and duration |
-| `v_trainer_booking_stats` | Trainer bookings report: completed, no-shows, hours delivered, distinct members |
-| `v_monthly_revenue` | Revenue trend (collected and refunded per month) |
-| `v_member_monthly_usage` | Personal-training sessions used per member per month (quota display) |
+| `v_trainer_schedule` | Trainer and member schedules with names, duration, price and payment status |
+| `v_trainer_booking_stats` | Trainer bookings report: completed, no-shows, hours delivered, distinct members, PT revenue |
+| `v_monthly_revenue` | Revenue trend per month: memberships, training, total, refunded |
+| `v_member_monthly_usage` | Training sessions per member per month (dashboards) |
 
 ## 6. Concurrency
 
@@ -300,7 +312,7 @@ Triggers check overlaps with `SELECT … EXISTS`, which on its own does not stop
 
 1. **App connections use READ COMMITTED.** At MySQL's default REPEATABLE READ, the SELECTs inside a trigger take shared *gap* locks. Two concurrent inserts into the same index gap then deadlock (MySQL error 1213); we saw this when selling plans to two new members at the same moment. Under READ COMMITTED, trigger reads are plain consistent reads, so there are no gap locks.
 2. **Explicit row locks serialize the races that matter.** Each operation locks a parent row with `SELECT … FOR UPDATE` before inserting:
-   - booking → the trainer row, then the member row (always in that order, so there are no deadlocks; R2/R3/R5)
+   - booking (and its payment) → the trainer row, then the member row (always in that order, so there are no deadlocks; R2/R3)
    - selling a subscription → the member row (R6)
    - recording a payment or checking out → the subscription row (R9)
 

@@ -1,5 +1,5 @@
 const {
-  SEED, loginAs, futureWeekday, isoDate, memberWithPlan,
+  SEED, RATES, loginAs, futureWeekday, isoDate, memberWithPlan,
 } = require('./helpers');
 const { sequelize } = require('../src/models');
 
@@ -19,7 +19,10 @@ describe('booking personal-training sessions', () => {
     expect(res.body.windows).toEqual([{ startTime: '07:00', endTime: '11:00' }, { startTime: '17:00', endTime: '21:00' }]);
     expect(res.body.slots.map((s) => s.time)).toEqual(['07:00', '07:30', '08:00', '08:30', '09:00', '09:30', '10:00',
       '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00']);
-    expect(res.body.eligibility).toMatchObject({ eligible: true, quota: 4 });
+    expect(res.body.eligibility).toMatchObject({ eligible: true });
+    expect(res.body.priceKrw).toBe(RATES[SEED.trainerId]); // one hour at Daniel's rate
+    const ninety = await agent.get(`/api/member/trainers/${SEED.trainerId}/slots`).query({ date: monday, duration: 90 });
+    expect(ninety.body.priceKrw).toBe(RATES[SEED.trainerId] * 1.5);
 
     const sunday = futureWeekday(7, 25);
     const off = await agent.get(`/api/member/trainers/${SEED.trainerId}/slots`).query({ date: sunday });
@@ -33,7 +36,10 @@ describe('booking personal-training sessions', () => {
     const day = futureWeekday(2, 26);
     const booked = await a.agent.post('/api/member/bookings').send({ trainerId: SEED.trainerId, startsAt: `${day} 08:00`, duration: 60, memberNote: 'legs' });
     expect(booked.status).toBe(201);
-    expect(booked.body).toMatchObject({ status: 'booked', startsAt: `${day} 08:00:00`, endsAt: `${day} 09:00:00`, durationMin: 60, memberNote: 'legs' });
+    expect(booked.body).toMatchObject({
+      status: 'booked', startsAt: `${day} 08:00:00`, endsAt: `${day} 09:00:00`, durationMin: 60, memberNote: 'legs',
+      priceKrw: RATES[SEED.trainerId], paymentStatus: 'paid',
+    });
 
     const slots = await b.agent.get(`/api/member/trainers/${SEED.trainerId}/slots`).query({ date: day, duration: 60 });
     const byTime = Object.fromEntries(slots.body.slots.map((s) => [s.time, s.reason]));
@@ -79,13 +85,13 @@ describe('booking personal-training sessions', () => {
     expect(res.body.error.rule).toBe('R4');
   });
 
-  test('the monthly quota is enforced (R5) and cancelled sessions free it again', async () => {
-    const { agent } = await memberWithPlan(admin); // 4 sessions / month
-    // Five weekdays in one calendar month, past the seeded bookings (21 days)
-    // and inside the 60-day booking window.
+  test('sessions are paid per booking (R5): price from the rate, no monthly limit, refund on cancel', async () => {
+    const { agent } = await memberWithPlan(admin);
+    // Six weekdays in one calendar month, past the seeded bookings (21 days)
+    // and inside the 60-day booking window: no quota stops them.
     const weekdaysFrom = (from) => {
       const out = [];
-      for (const d = new Date(from); out.length < 5 && d.getMonth() === from.getMonth(); d.setDate(d.getDate() + 1)) {
+      for (const d = new Date(from); out.length < 6 && d.getMonth() === from.getMonth(); d.setDate(d.getDate() + 1)) {
         if (((d.getDay() + 6) % 7) + 1 <= 5) out.push(isoDate(d));
       }
       return out;
@@ -93,34 +99,62 @@ describe('booking personal-training sessions', () => {
     const start = new Date();
     start.setDate(start.getDate() + 22);
     let days = weekdaysFrom(start);
-    if (days.length < 5) days = weekdaysFrom(new Date(start.getFullYear(), start.getMonth() + 1, 1));
+    if (days.length < 6) days = weekdaysFrom(new Date(start.getFullYear(), start.getMonth() + 1, 1));
+
+    // A declined card books nothing
+    const declined = await agent.post('/api/member/bookings')
+      .send({ trainerId: SEED.otherTrainerId, startsAt: `${days[0]} 18:00`, duration: 30, simulateFailure: true });
+    expect(declined.status).toBe(402);
+    const after = await agent.get('/api/member/bookings').query({ scope: 'upcoming' });
+    expect(after.body).toEqual([]);
+
     const ids = [];
-    for (const day of days.slice(0, 4)) {
-      const r = await agent.post('/api/member/bookings').send({ trainerId: SEED.trainerId, startsAt: `${day} 20:00`, duration: 60 });
+    for (const day of days) {
+      const r = await agent.post('/api/member/bookings').send({ trainerId: SEED.otherTrainerId, startsAt: `${day} 18:00`, duration: 30 });
       expect(r.status).toBe(201);
+      expect(r.body).toMatchObject({ priceKrw: RATES[SEED.otherTrainerId] / 2, paymentStatus: 'paid' });
       ids.push(r.body.bookingId);
     }
-    const fifth = await agent.post('/api/member/bookings').send({ trainerId: SEED.trainerId, startsAt: `${days[4]} 20:00`, duration: 60 });
-    expect(fifth.status).toBe(409);
-    expect(fifth.body.error.rule).toBe('R5');
-    expect(fifth.body.error.message).toMatch(/used all 4 sessions/);
+    const paid = await agent.get('/api/member/payments');
+    const sessions = paid.body.filter((x) => x.product === 'Personal training');
+    expect(sessions).toHaveLength(6);
+    expect(sessions.every((x) => x.status === 'paid' && x.method === 'online' && x.amountKrw === 25000)).toBe(true);
 
-    expect((await agent.post(`/api/member/bookings/${ids[0]}/cancel`)).status).toBe(200);
-    expect((await agent.post('/api/member/bookings').send({ trainerId: SEED.trainerId, startsAt: `${days[4]} 20:00`, duration: 60 })).status).toBe(201);
+    // Cancelling refunds the payment (trigger trg_bookings_au)
+    const cancelled = await agent.post(`/api/member/bookings/${ids[0]}/cancel`);
+    expect(cancelled.body).toMatchObject({ status: 'cancelled', paymentStatus: 'refunded' });
   });
 
   test.each([
-    ['joonho', 'R1', /membership ends on/],
-    ['sara', 'R1', /not fully paid/],
-    ['ethan', 'R1', /frozen/],
-    ['taeyang', 'R5', /does not include personal training/],
-  ])('%s cannot book: %s', async (who, rule, message) => {
+    ['joonho', /membership ends on/],
+    ['ethan', /frozen/],
+  ])('%s cannot book (R1)', async (who, message) => {
     const agent = await loginAs(SEED[who]);
-    const day = futureWeekday(5, 2); // within the next 2 weeks (inside the frozen/unpaid period)
+    const day = futureWeekday(5, 2); // within the next 2 weeks (inside the frozen period)
     const res = await agent.post('/api/member/bookings').send({ trainerId: SEED.otherTrainerId, startsAt: `${day} 10:00`, duration: 60 });
     expect(res.status).toBe(409);
-    expect(res.body.error.rule).toBe(rule);
+    expect(res.body.error.rule).toBe('R1');
     expect(res.body.error.message).toMatch(message);
+  });
+
+  test('a membership awaiting payment does not allow booking in its period (R1)', async () => {
+    const agent = await loginAs(SEED.taeyang);
+    const { body } = await agent.get('/api/member/overview');
+    expect(body.next).toMatchObject({ status: 'pending_payment' });
+    const [y, m, d] = body.next.startDate.split('-').map(Number);
+    let day = new Date(y, m - 1, d + 2);
+    while (![1, 2, 3, 4, 5].includes(day.getDay())) day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
+    const res = await agent.post('/api/member/bookings').send({ trainerId: SEED.otherTrainerId, startsAt: `${isoDate(day)} 10:00`, duration: 60 });
+    expect(res.status).toBe(409);
+    expect(res.body.error.rule).toBe('R1');
+    expect(res.body.error.message).toMatch(/not fully paid/);
+  });
+
+  test('a brand-new member can book right away', async () => {
+    const agent = await loginAs(SEED.sara);
+    const day = futureWeekday(2, 3);
+    const res = await agent.post('/api/member/bookings').send({ trainerId: SEED.otherTrainerId, startsAt: `${day} 11:00`, duration: 60 });
+    expect(res.status).toBe(201);
   });
 
   test('invalid lengths, off-grid times, past times and short notice are refused', async () => {
@@ -160,15 +194,21 @@ describe('booking personal-training sessions', () => {
     expect(window.status).toBe(201);
 
     const day = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
-    const booking = await admin.post('/api/admin/bookings').send({
+    const unpaid = await admin.post('/api/admin/bookings').send({
       memberId: m.memberId, trainerId: trainer.body.userId, startsAt: `${day} ${hhmm(start)}`, duration: 30,
     });
+    expect(unpaid.status).toBe(400); // the desk takes the payment with the booking
+    const booking = await admin.post('/api/admin/bookings').send({
+      memberId: m.memberId, trainerId: trainer.body.userId, startsAt: `${day} ${hhmm(start)}`, duration: 30, payment: { method: 'cash' },
+    });
     expect(booking.status).toBe(201);
+    expect(booking.body).toMatchObject({ priceKrw: 25000, paymentStatus: 'paid' }); // default ₩50,000/h
 
     const memberCancel = await m.agent.post(`/api/member/bookings/${booking.body.bookingId}/cancel`);
     expect(memberCancel.status).toBe(409);
     expect(memberCancel.body.error.message).toMatch(/12 hours/);
-    expect((await admin.post(`/api/admin/bookings/${booking.body.bookingId}/cancel`)).status).toBe(200);
+    const deskCancel = await admin.post(`/api/admin/bookings/${booking.body.bookingId}/cancel`);
+    expect(deskCancel.body).toMatchObject({ status: 'cancelled', paymentStatus: 'refunded' });
   });
 
   test('a session cannot be completed before it starts, and a cancelled one cannot be revived (R8)', async () => {

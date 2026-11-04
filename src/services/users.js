@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
-const { sequelize, User, Member, Trainer, Role } = require('../models');
+const { sequelize, User, Member, Trainer, Role, Payment } = require('../models');
+const subscriptions = require('./subscriptions');
 const time = require('../lib/time');
 const { notFound } = require('../lib/http-error');
 
@@ -10,12 +11,12 @@ const hashPassword = (password) => bcrypt.hash(password, BCRYPT_COST);
 
 // Creates the login row and, for members/trainers, the profile row in one
 // transaction (trg_members_bi / trg_trainers_bi check the role matches, R12).
-async function createUser({ role, email, password, firstName, lastName, phone, profile = {} }) {
+async function createUser({ role, email, password, firstName, lastName, phone, profile = {} }, { transaction } = {}) {
   const passwordHash = await hashPassword(password);
-  return sequelize.transaction(async (transaction) => {
+  const create = async (t) => {
     const user = await User.create({
       roleId: ROLE_IDS[role], email, passwordHash, firstName, lastName, phone,
-    }, { transaction });
+    }, { transaction: t });
     if (role === 'member') {
       await Member.create({
         memberId: user.userId,
@@ -23,16 +24,35 @@ async function createUser({ role, email, password, firstName, lastName, phone, p
         emergencyContactName: profile.emergencyContactName || null,
         emergencyContactPhone: profile.emergencyContactPhone || null,
         joinedOn: time.today(),
-      }, { transaction });
+      }, { transaction: t });
     } else if (role === 'trainer') {
       await Trainer.create({
         trainerId: user.userId,
         specialization: profile.specialization,
         bio: profile.bio || null,
+        hourlyRateKrw: profile.hourlyRateKrw || undefined,
         hiredOn: profile.hiredOn || time.today(),
-      }, { transaction });
+      }, { transaction: t });
     }
     return user.userId;
+  };
+  return transaction ? create(transaction) : sequelize.transaction(create);
+}
+
+// No free users: a member joins together with a paid membership. The
+// account, profile, subscription (starting today) and payment are created in
+// one transaction; `charge()` runs last and may throw (e.g. a declined card),
+// which leaves nothing behind. `createdBy` is the desk admin, or null online.
+async function createMemberWithPlan({ person, planId, charge, createdBy = null }) {
+  return sequelize.transaction(async (transaction) => {
+    const userId = await createUser({ role: 'member', ...person, profile: person }, { transaction });
+    const sub = await subscriptions.createSubscription({
+      memberId: userId, planId, startDate: time.today(), createdBy: createdBy ?? userId,
+    }, { transaction });
+    await Payment.create({
+      subscriptionId: sub.subscriptionId, amountKrw: sub.priceKrw, recordedBy: createdBy ?? userId, ...charge(),
+    }, { transaction });
+    return userId;
   });
 }
 
@@ -86,4 +106,4 @@ async function profile(userId) {
   };
 }
 
-module.exports = { ROLE_IDS, createUser, updateUser, verifyPassword, changePassword, profile, hashPassword };
+module.exports = { ROLE_IDS, createUser, createMemberWithPlan, updateUser, verifyPassword, changePassword, profile, hashPassword };

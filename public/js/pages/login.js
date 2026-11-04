@@ -3,8 +3,9 @@ import { api, html, render, busy, $, queryParam } from '../app.js';
 const DEMO = [
   ['admin@binaryfit.test', 'admin', 'Front desk: reports, members, payments'],
   ['daniel.park@binaryfit.test', 'trainer', 'Daniel Park: schedule and availability'],
-  ['minji.kim@binaryfit.test', 'member', 'Active Premium member with sessions'],
-  ['sara.ahmed@binaryfit.test', 'member', 'New member, payment not done yet'],
+  ['minji.kim@binaryfit.test', 'member', '6-month member, trains with Daniel weekly'],
+  ['sara.ahmed@binaryfit.test', 'member', 'Joined and paid online today'],
+  ['taeyang.seo@binaryfit.test', 'member', 'Gym only; renewal awaiting bank transfer'],
   ['joonho.lee@binaryfit.test', 'member', 'Expired membership: cannot book'],
   ['ethan.brooks@binaryfit.test', 'member', 'Membership frozen right now'],
 ];

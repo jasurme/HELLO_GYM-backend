@@ -4,9 +4,11 @@
 
 A web application on a MySQL database. It centralizes gym memberships, trainer availability, personal-training bookings and payments, and keeps them consistent.
 
-- **Members** register, buy or renew a plan (simulated online checkout), see their status, and book 1-on-1 sessions with trainers.
+- **Members** sign up in three steps (details → membership → online payment, simulated); no account exists without a paid membership. They renew online and book 1-on-1 sessions with any trainer whenever they like, **paid per session**.
 - **Trainers** set their weekly hours, see their schedule and members, and mark sessions completed or no-show.
-- **Admins** (front desk) manage members, trainers, plans, subscriptions, freezes and payments, and view management reports.
+- **Admins** (front desk) enroll members (always with a paid plan), manage trainers and their hourly rates, plans, subscriptions, freezes and payments, book sessions on a member's behalf, and view management reports.
+
+**Memberships are gym access only**: 1 Month ₩70,000 · 3 Months ₩189,000 · 6 Months ₩342,000 · 1 Year ₩600,000. **Personal training is separate**: each session costs the trainer's hourly rate × its length (e.g. ₩60,000/h → a 30-minute session is ₩30,000), paid when booked and refunded automatically when cancelled.
 
 The database is normalized to **3NF (and BCNF)**. Its business rules are enforced **by MySQL itself** (triggers, CHECK and foreign keys), and the app checks them again to give friendly messages.
 
@@ -22,6 +24,8 @@ The database is normalized to **3NF (and BCNF)**. Its business rules are enforce
 | ![Booking page](docs/screenshots/member-booking.jpg) | ![Admin dashboard](docs/screenshots/admin-dashboard.jpg) |
 | **Member: dashboard** | **Trainer: today** |
 | ![Member dashboard](docs/screenshots/member-dashboard.jpg) | ![Trainer dashboard](docs/screenshots/trainer-dashboard.jpg) |
+| **Sign-up: choose a membership** | |
+| ![Sign-up, step 2](docs/screenshots/signup-plan.jpg) | |
 
 ---
 
@@ -52,14 +56,14 @@ npm start                        # → http://localhost:3000
 |---|---|---|
 | Admin | `admin@binaryfit.test` | Front desk: everything, plus reports |
 | Trainer | `daniel.park@binaryfit.test` | Strength coach with a full schedule |
-| Member | `minji.kim@binaryfit.test` | Active Premium plan, upcoming sessions |
-| Member | `sara.ahmed@binaryfit.test` | New member, plan not paid yet (try the checkout) |
+| Member | `minji.kim@binaryfit.test` | 6-month member who trains with Daniel every week |
+| Member | `sara.ahmed@binaryfit.test` | Signed up and paid online today, no sessions yet |
 | Member | `joonho.lee@binaryfit.test` | Membership expired, so cannot book (R1) |
-| Member | `taeyang.seo@binaryfit.test` | Basic plan without personal training (R5) |
+| Member | `taeyang.seo@binaryfit.test` | Gym only; his renewal awaits a bank transfer (pay it online, or "Mark paid" as admin) |
 | Member | `yuna.choi@binaryfit.test` | Plan ends within a week, so shows in "Expiring soon" |
 | Member | `ethan.brooks@binaryfit.test` | Membership frozen right now |
 
-The login page lists these accounts. Click one to fill in the form.
+The login page lists these accounts. Click one to fill in the form. To try the sign-up, use **Join now** with any new email; the demo checkout also has a "Simulate a declined card" button.
 
 ---
 
@@ -67,9 +71,9 @@ The login page lists these accounts. Click one to fill in the form.
 
 | File | Contents |
 |---|---|
-| [`db/01_schema.sql`](db/01_schema.sql) | 10 tables with 14 foreign keys, 19 `CHECK` constraints, indexes |
+| [`db/01_schema.sql`](db/01_schema.sql) | 10 tables with 15 foreign keys, 20 `CHECK` constraints, indexes |
 | [`db/02_views.sql`](db/02_views.sql) | 7 views: derived subscription status, schedules, report views |
-| [`db/03_triggers.sql`](db/03_triggers.sql) | 16 triggers + 2 helper procedures enforcing rules R1–R12 |
+| [`db/03_triggers.sql`](db/03_triggers.sql) | 17 triggers + 2 helper procedures enforcing rules R1–R12 |
 | `db/04_seed.sql` | Generated demo data (≈60 members, 6 trainers, 5 plans, 12 months of history) |
 | [`db/05_reports.sql`](db/05_reports.sql) | Management report queries (the dashboard runs these exact queries) |
 | [`db/06_rule_tests.sql`](db/06_rule_tests.sql) | Live demonstration of every rule, rolled back at the end |
@@ -82,20 +86,20 @@ The login page lists these accounts. Click one to fill in the form.
 
 | # | Rule | Enforced by |
 |---|---|---|
-| R1 | Booking needs an active, fully paid, non-frozen subscription | trigger (+ app) |
+| R1 | Booking a trainer needs an active, fully paid, non-frozen membership on that day | trigger (+ app) |
 | R2 | A trainer is never double-booked | trigger + row lock (+ app) |
 | R3 | A member is never double-booked | trigger + row lock (+ app) |
 | R4 | Sessions fit inside the trainer's weekly hours | trigger (+ app) |
-| R5 | Monthly personal-training quota from the plan | trigger (+ app) |
+| R5 | A session's price comes from the trainer's hourly rate; cancelling a session refunds its payment | triggers |
 | R6 | A member's subscriptions never overlap | trigger + row lock |
 | R7 | Role-based access: members and trainers see only their own data | Express middleware + query scoping |
 | R8 | Booking lifecycle (booked → completed / no-show / cancelled). Members cancel ≥ 12 h ahead | trigger (+ app) |
-| R9 | Payments never exceed the price. Valid payment status changes only | trigger + row lock |
+| R9 | A payment is for a membership **or** a session; it never exceeds the agreed price; valid status changes only | CHECK + trigger + row lock |
 | R10 | Freezes: inside the period, no overlap, no booked sessions. Extend the end date | triggers |
 | R11 | A trainer's weekly windows never overlap | trigger |
 | R12 | Profiles match roles. Inactive accounts cannot book | triggers |
 
-Prove them: `npm run db:check-rules` runs `db/06_rule_tests.sql` and shows all **25 rejections**.
+Prove them: `npm run db:check-rules` runs `db/06_rule_tests.sql` and shows all **26 rejections**.
 
 ### MySQL Workbench
 - **ERD:** *Database → Reverse Engineer…* → connection to `127.0.0.1:3306` as `root` → select `gym_db` → Finish. Or use *File → Import → Reverse Engineer MySQL Create Script…* with `db/01_schema.sql`.

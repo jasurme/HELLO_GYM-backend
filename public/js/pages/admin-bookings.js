@@ -48,7 +48,7 @@ filters.addEventListener('submit', (e) => e.preventDefault());
 $('#list').addEventListener('click', async (event) => {
   const btn = event.target.closest('[data-cancel]');
   if (!btn) return;
-  const ok = await confirmDialog({ title: 'Cancel this session?', body: 'The session goes back into the member\'s monthly quota.', confirmText: 'Cancel session', variant: 'danger' });
+  const ok = await confirmDialog({ title: 'Cancel this session?', body: 'The member is refunded automatically (trigger trg_bookings_au).', confirmText: 'Cancel session', variant: 'danger' });
   if (!ok) return;
   try {
     await api(`/admin/bookings/${btn.dataset.cancel}/cancel`, { method: 'POST' });

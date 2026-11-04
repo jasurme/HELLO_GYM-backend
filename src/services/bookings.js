@@ -1,6 +1,6 @@
 const { Transaction } = require('sequelize');
 const {
-  sequelize, User, Member, Trainer, TrainerAvailability, Booking, TrainerSchedule,
+  sequelize, User, Member, Trainer, TrainerAvailability, Booking, Payment, TrainerSchedule,
 } = require('../models');
 const { select, selectOne } = require('../lib/sql');
 const time = require('../lib/time');
@@ -9,38 +9,29 @@ const {
   SESSION_LENGTHS, BOOKING_LEAD_MINUTES, BOOKING_MAX_DAYS_AHEAD, MEMBER_CANCEL_NOTICE_HOURS,
 } = require('../config/rules');
 
-const monthName = (date) => time.parseLocal(date).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+// Same rule as trg_bookings_bi (R5): hourly rate × length, rounded to 1,000 won.
+const sessionPrice = (hourlyRateKrw, minutes) => Math.round((hourlyRateKrw * minutes) / 60 / 1000) * 1000;
 
-// App-side check of R1 (subscription) and R5 (quota) for a session date, with
-// messages that tell the member what to do. The triggers re-check on insert.
+// App-side check of R1 for a session date, with a message that tells the
+// member what to do. The trigger re-checks on insert.
 async function getEligibility(memberId, date, { transaction } = {}) {
-  const monthStart = `${date.slice(0, 7)}-01`;
-  const [sub, usage] = await Promise.all([
-    selectOne(
-      `SELECT s.subscription_id, s.start_date, s.end_date, s.price_krw, mp.plan_name, mp.sessions_per_month,
-              (SELECT COALESCE(SUM(p.amount_krw), 0) FROM payments p
-                WHERE p.subscription_id = s.subscription_id AND p.status = 'paid') AS paid_krw,
-              (SELECT MIN(f.freeze_start) FROM subscription_freezes f
-                WHERE f.subscription_id = s.subscription_id AND :date BETWEEN f.freeze_start AND f.freeze_end) AS freeze_start,
-              (SELECT MIN(f.freeze_end) FROM subscription_freezes f
-                WHERE f.subscription_id = s.subscription_id AND :date BETWEEN f.freeze_start AND f.freeze_end) AS freeze_end
-       FROM subscriptions s
-       JOIN membership_plans mp ON mp.plan_id = s.plan_id
-       WHERE s.member_id = :memberId AND s.cancelled_at IS NULL
-         AND :date BETWEEN s.start_date AND s.end_date
-       LIMIT 1`,
-      { memberId, date }, { transaction },
-    ),
-    selectOne(
-      `SELECT COUNT(*) AS used FROM bookings
-       WHERE member_id = :memberId AND status <> 'cancelled'
-         AND starts_at >= :monthStart AND starts_at < :monthStart + INTERVAL 1 MONTH`,
-      { memberId, monthStart }, { transaction },
-    ),
-  ]);
+  const sub = await selectOne(
+    `SELECT s.subscription_id, s.start_date, s.end_date, s.price_krw, mp.plan_name,
+            (SELECT COALESCE(SUM(p.amount_krw), 0) FROM payments p
+              WHERE p.subscription_id = s.subscription_id AND p.status = 'paid') AS paid_krw,
+            (SELECT MIN(f.freeze_start) FROM subscription_freezes f
+              WHERE f.subscription_id = s.subscription_id AND :date BETWEEN f.freeze_start AND f.freeze_end) AS freeze_start,
+            (SELECT MIN(f.freeze_end) FROM subscription_freezes f
+              WHERE f.subscription_id = s.subscription_id AND :date BETWEEN f.freeze_start AND f.freeze_end) AS freeze_end
+     FROM subscriptions s
+     JOIN membership_plans mp ON mp.plan_id = s.plan_id
+     WHERE s.member_id = :memberId AND s.cancelled_at IS NULL
+       AND :date BETWEEN s.start_date AND s.end_date
+     LIMIT 1`,
+    { memberId, date }, { transaction },
+  );
 
-  const used = usage.used;
-  const base = { eligible: false, used, quota: 0, remaining: 0, month: monthName(date), subscription: sub };
+  const base = { eligible: false, subscription: sub };
   if (!sub) {
     const last = await selectOne(
       `SELECT MAX(end_date) AS end_date FROM subscriptions
@@ -49,7 +40,7 @@ async function getEligibility(memberId, date, { transaction } = {}) {
     );
     const reason = last?.endDate
       ? `Your membership ends on ${last.endDate}. Renew it to book sessions after that date.`
-      : 'You need an active membership to book personal-training sessions.';
+      : 'You need an active membership to book a trainer.';
     return { ...base, rule: 'R1', reason };
   }
   if (sub.paidKrw < sub.priceKrw) {
@@ -58,15 +49,7 @@ async function getEligibility(memberId, date, { transaction } = {}) {
   if (sub.freezeStart) {
     return { ...base, rule: 'R1', reason: `Your membership is frozen from ${sub.freezeStart} to ${sub.freezeEnd}.` };
   }
-  const quota = sub.sessionsPerMonth;
-  if (quota === 0) {
-    return { ...base, rule: 'R5', reason: `Your ${sub.planName} plan does not include personal training. Choose a PT plan to book trainers.` };
-  }
-  const remaining = Math.max(quota - used, 0);
-  if (remaining === 0) {
-    return { ...base, quota, rule: 'R5', reason: `You have used all ${quota} sessions for ${monthName(date)}.` };
-  }
-  return { ...base, eligible: true, quota, remaining, rule: null, reason: null };
+  return { ...base, eligible: true, rule: null, reason: null };
 }
 
 // Bookable start times for one trainer on one day, every 30 minutes inside
@@ -113,10 +96,12 @@ async function findSlots({ trainerId, date, duration = 60, memberId }) {
   return {
     date,
     duration,
+    priceKrw: sessionPrice(trainer.hourlyRateKrw, duration),
     trainer: {
       trainerId,
       name: `${trainer.User.firstName} ${trainer.User.lastName}`,
       specialization: trainer.specialization,
+      hourlyRateKrw: trainer.hourlyRateKrw,
     },
     windows: windows.map((w) => ({ startTime: w.startTime.slice(0, 5), endTime: w.endTime.slice(0, 5) })),
     slots,
@@ -124,7 +109,10 @@ async function findSlots({ trainerId, date, duration = 60, memberId }) {
   };
 }
 
-async function createBooking({ memberId, trainerId, startsAt, duration, memberNote = null, enforcePolicy = true }) {
+// Books a session and takes its payment in one transaction. `charge()` runs
+// last and returns the payment fields (online gateway or desk); if it throws
+// (a declined card), the booking is rolled back too.
+async function createBooking({ memberId, trainerId, startsAt, duration, memberNote = null, enforcePolicy = true, charge, recordedBy }) {
   if (!SESSION_LENGTHS.includes(duration)) throw badRequest('Sessions last 30, 60 or 90 minutes');
   const start = time.parseLocal(startsAt);
   if (!start) throw badRequest('Use the format YYYY-MM-DD HH:mm');
@@ -154,6 +142,7 @@ async function createBooking({ memberId, trainerId, startsAt, duration, memberNo
     const eligibility = await getEligibility(memberId, time.formatDate(start), { transaction });
     if (!eligibility.eligible) throw conflict(eligibility.reason, { rule: eligibility.rule });
 
+    // No price given: trg_bookings_bi prices it from the trainer's rate (R5).
     const booking = await Booking.create({
       memberId,
       trainerId,
@@ -161,6 +150,10 @@ async function createBooking({ memberId, trainerId, startsAt, duration, memberNo
       endsAt: time.formatDateTime(end),
       memberNote,
     }, { transaction });
+    await booking.reload({ transaction });
+    if (booking.priceKrw > 0) {
+      await Payment.create({ bookingId: booking.bookingId, amountKrw: booking.priceKrw, recordedBy, ...charge() }, { transaction });
+    }
     return booking.bookingId;
   });
 
@@ -185,7 +178,8 @@ async function cancelBooking(bookingId, actor) {
   if (actor.role === 'member' && start - new Date() < MEMBER_CANCEL_NOTICE_HOURS * 3600000) {
     throw conflict(`Sessions can be cancelled online up to ${MEMBER_CANCEL_NOTICE_HOURS} hours before they start. Please call the front desk.`, { rule: 'R8' });
   }
-  await booking.update({ status: 'cancelled', cancelledBy: actor.userId }); // trigger stamps cancelled_at
+  // Triggers stamp cancelled_at and refund the session's payment (R5).
+  await booking.update({ status: 'cancelled', cancelledBy: actor.userId });
   return TrainerSchedule.findByPk(bookingId, { raw: true });
 }
 
@@ -222,4 +216,4 @@ async function listBookings({ memberId, trainerId, status, from, to, scope, sear
   );
 }
 
-module.exports = { getEligibility, findSlots, createBooking, cancelBooking, updateSession, listBookings };
+module.exports = { sessionPrice, getEligibility, findSlots, createBooking, cancelBooking, updateSession, listBookings };

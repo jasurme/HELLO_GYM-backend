@@ -13,7 +13,7 @@ describe('management reports', () => {
 
   test('every named query in db/05_reports.sql is loaded', () => {
     expect(Object.keys(reports.queries).sort()).toEqual([
-      'active_by_plan', 'active_by_status', 'expiring_soon', 'outstanding_balances', 'revenue_by_plan_method',
+      'active_by_plan', 'active_by_status', 'expiring_soon', 'outstanding_balances', 'revenue_by_product_method',
       'revenue_headline', 'revenue_trend', 'trainer_last_30_days', 'trainer_lifetime',
     ]);
   });
@@ -39,7 +39,7 @@ describe('management reports', () => {
 
   test('revenue: 12 consecutive months, totals consistent with payments', async () => {
     const res = await admin.get('/api/admin/reports/revenue');
-    const { trend, headline, byPlanMethod } = res.body;
+    const { trend, headline, byProductMethod } = res.body;
     expect(trend).toHaveLength(12);
     const months = trend.map((t) => t.month);
     expect([...months].sort()).toEqual(months);
@@ -50,8 +50,22 @@ describe('management reports', () => {
     expect(headline.thisYearKrw).toBe(year.krw);
 
     // The ROLLUP grand total equals the sum of the 12-month trend
-    const grand = byPlanMethod.find((r) => r.planName === null && r.method === null);
+    const grand = byProductMethod.find((r) => r.product === null && r.method === null);
     expect(grand.revenueKrw).toBe(trend.reduce((s, t) => s + t.revenueKrw, 0));
+  });
+
+  test('revenue is split into memberships and personal training', async () => {
+    const res = await admin.get('/api/admin/reports/revenue');
+    const { headline, trend, byProductMethod } = res.body;
+    expect(headline.thisYearMembershipKrw + headline.thisYearTrainingKrw).toBe(headline.thisYearKrw);
+    for (const t of trend) expect(t.membershipKrw + t.trainingKrw).toBe(t.revenueKrw);
+    const training = byProductMethod.find((r) => r.product === 'Personal training' && r.method === null);
+    const sessions = await one(
+      `SELECT COALESCE(SUM(amount_krw), 0) AS krw FROM payments WHERE status = 'paid' AND booking_id IS NOT NULL
+         AND paid_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') - INTERVAL 11 MONTH`,
+    );
+    expect(training.revenueKrw).toBe(sessions.krw);
+    expect(training.revenueKrw).toBeGreaterThan(0);
   });
 
   test('trainer bookings for a date range', async () => {

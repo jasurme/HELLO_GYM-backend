@@ -18,12 +18,12 @@ async function load() {
   plans = await api('/admin/plans');
   render('#table', plans.length ? html`<table class="table align-middle mb-0">
     <thead><tr><th>Plan</th><th class="text-end">Months</th><th class="text-end">Price</th><th class="text-end">Per month</th>
-      <th class="text-end">PT / month</th><th class="text-end">Active members</th><th class="text-end">Times sold</th><th>On sale</th><th></th></tr></thead>
+      <th class="text-end">Active members</th><th class="text-end">Times sold</th><th>On sale</th><th></th></tr></thead>
     <tbody>${plans.map((p) => html`<tr class="${p.isActive ? '' : 'text-secondary'}">
       <td><div class="fw-semibold">${p.planName}</div><div class="small text-secondary">${p.description || ''}</div></td>
       <td class="text-end">${p.durationMonths}</td><td class="text-end font-tabular">${krw(p.priceKrw)}</td>
       <td class="text-end font-tabular small">${krw(p.priceKrw / p.durationMonths)}</td>
-      <td class="text-end">${p.sessionsPerMonth}</td><td class="text-end">${p.activeMembers}</td><td class="text-end">${p.timesSold}</td>
+      <td class="text-end">${p.activeMembers}</td><td class="text-end">${p.timesSold}</td>
       <td><div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" data-toggle="${p.planId}" ${p.isActive ? 'checked' : ''}></div></td>
       <td class="text-end text-nowrap">
         <button class="btn btn-sm btn-light" data-edit="${p.planId}"><i class="bi bi-pencil"></i></button>
@@ -37,9 +37,8 @@ function planForm(plan = {}) {
     body: html`<div class="row g-3">
       <div class="col-12"><label class="form-label">Name</label><input class="form-control" name="planName" value="${plan.planName || ''}"></div>
       <div class="col-12"><label class="form-label">Description</label><input class="form-control" name="description" maxlength="255" value="${plan.description || ''}"></div>
-      <div class="col-sm-4"><label class="form-label">Months</label><input class="form-control" type="number" name="durationMonths" min="1" max="24" value="${plan.durationMonths || 1}"></div>
-      <div class="col-sm-4"><label class="form-label">Price (KRW)</label><input class="form-control" type="number" name="priceKrw" min="1000" step="1000" value="${plan.priceKrw || ''}"></div>
-      <div class="col-sm-4"><label class="form-label">PT sessions / month</label><input class="form-control" type="number" name="sessionsPerMonth" min="0" max="30" value="${plan.sessionsPerMonth ?? 0}"></div>
+      <div class="col-sm-6"><label class="form-label">Months</label><input class="form-control" type="number" name="durationMonths" min="1" max="24" value="${plan.durationMonths || 1}"></div>
+      <div class="col-sm-6"><label class="form-label">Price (KRW)</label><input class="form-control" type="number" name="priceKrw" min="1000" step="1000" value="${plan.priceKrw || ''}"></div>
       <div class="col-12"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="isActive" id="isActive" ${plan.isActive === false ? '' : 'checked'}>
         <label class="form-check-label" for="isActive">On sale</label></div></div>
     </div>`,

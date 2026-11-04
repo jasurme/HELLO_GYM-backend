@@ -1,5 +1,5 @@
 import {
-  api, initPage, html, render, toast, showError, confirmDialog, emptyState, fmtRange, krw, $,
+  api, initPage, html, render, toast, showError, confirmDialog, emptyState, fmtRange, krw, queryParam, $,
 } from '../app.js';
 import { membershipCard, sessionList } from '../components.js';
 
@@ -11,19 +11,23 @@ async function load() {
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const { current, eligibility, unpaid, upcoming } = data;
 
-  let actions = html`<a class="btn btn-light text-brand fw-semibold" href="/member/book.html"><i class="bi bi-calendar-plus me-1"></i>Book a session</a>`;
-  if (!current) actions = html`<a class="btn btn-light text-brand fw-semibold" href="/member/membership.html">Choose a plan</a>`;
+  let actions = html`<a class="btn btn-light text-brand fw-semibold" href="/member/book.html"><i class="bi bi-calendar-plus me-1"></i>Book a trainer</a>`;
+  if (!current) actions = html`<a class="btn btn-light text-brand fw-semibold" href="/member/membership.html">Renew membership</a>`;
   else if (current.status === 'pending_payment') actions = html`<a class="btn btn-warning fw-semibold" href="/member/membership.html#pay">Pay ${krw(current.balanceKrw)}</a>`;
-  else if (current.sessionsPerMonth === 0) actions = html`<a class="btn btn-light text-brand fw-semibold" href="/member/membership.html">See PT plans</a>`;
+  else if (current.status === 'frozen') actions = '';
 
   render('#page', html`
     <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
       <div>
         <h1 class="page-title h3 mb-1">${greeting}, ${user.firstName}</h1>
-        <p class="page-subtitle mb-0">Here is your membership and your next sessions.</p>
+        <p class="page-subtitle mb-0">Here is your membership and your next training sessions.</p>
       </div>
-      <a class="btn btn-primary" href="/member/book.html"><i class="bi bi-calendar-plus me-1"></i>Book a session</a>
+      <a class="btn btn-primary" href="/member/book.html"><i class="bi bi-calendar-plus me-1"></i>Book a trainer</a>
     </div>
+
+    ${queryParam('welcome') ? html`<div class="alert alert-success d-flex align-items-center gap-2">
+      <i class="bi bi-stars"></i><div>Welcome to BinaryFit! Your <strong>${current?.planName}</strong> membership is paid and active.
+      Want a personal trainer? Book one any time; each session is paid when you book it.</div></div>` : ''}
 
     ${unpaid.length ? html`<div class="alert alert-warning d-flex align-items-center gap-2">
       <i class="bi bi-exclamation-triangle-fill"></i>
@@ -41,7 +45,7 @@ async function load() {
             <span><i class="bi bi-calendar-week me-2 text-brand"></i>Upcoming sessions</span>
             <a class="small" href="/member/bookings.html">See all</a>
           </div>
-          ${upcoming.length ? sessionList(upcoming) : emptyState('calendar-x', 'No sessions booked yet.')}
+          ${upcoming.length ? sessionList(upcoming) : emptyState('calendar-x', 'No training sessions booked. Trainers are optional and paid per session.')}
         </div>
       </div>
     </div>`);
@@ -53,7 +57,7 @@ $('#page').addEventListener('click', async (event) => {
   const id = btn.dataset.cancel;
   const ok = await confirmDialog({
     title: 'Cancel this session?',
-    body: 'The session goes back into your monthly quota.',
+    body: 'You get a full refund of what you paid for it.',
     confirmText: 'Cancel session',
     variant: 'danger',
   });

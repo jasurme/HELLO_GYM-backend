@@ -27,7 +27,7 @@ async function load() {
         <button class="btn btn-outline-secondary" data-action="edit"><i class="bi bi-pencil me-1"></i>Edit</button>
         <button class="btn ${p.isActive ? 'btn-outline-danger' : 'btn-outline-success'}" data-action="toggle">
           ${p.isActive ? 'Deactivate account' : 'Reactivate account'}</button>
-        <button class="btn btn-outline-primary" data-action="book" ${p.isActive ? '' : 'disabled'}><i class="bi bi-calendar-plus me-1"></i>Book session</button>
+        <button class="btn btn-outline-primary" data-action="book" ${p.isActive ? '' : 'disabled'}><i class="bi bi-calendar-plus me-1"></i>Book trainer</button>
         <button class="btn btn-primary" data-action="sell" ${p.isActive ? '' : 'disabled'}><i class="bi bi-plus-lg me-1"></i>Sell plan</button>
       </div>
     </div>
@@ -59,9 +59,9 @@ async function load() {
         <div class="card mb-4">
           <div class="card-header">Payments</div>
           ${data.payments.length ? html`<div class="table-responsive"><table class="table align-middle mb-0">
-            <thead><tr><th>Date</th><th>Plan</th><th>Method</th><th>Reference</th><th class="text-end">Amount</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Date</th><th>For</th><th>Method</th><th>Reference</th><th class="text-end">Amount</th><th>Status</th><th></th></tr></thead>
             <tbody>${data.payments.map((pay) => html`<tr>
-              <td class="small">${fmtDateTime(pay.paidAt || pay.createdAt)}</td><td class="small">${pay.planName}</td>
+              <td class="small">${fmtDateTime(pay.paidAt || pay.createdAt)}</td><td class="small"><div>${pay.product}</div>${pay.detail ? html`<div class="text-secondary">${pay.detail}</div>` : ''}</td>
               <td class="small">${METHOD_LABELS[pay.method]}</td><td class="small text-secondary">${pay.reference || '—'}</td>
               <td class="text-end font-tabular">${krw(pay.amountKrw)}</td><td>${badge('payment', pay.status)}</td>
               <td class="text-end text-nowrap">
@@ -86,7 +86,7 @@ async function load() {
               <span class="text-end">${p.member.emergencyContactName || '—'}<br>${p.member.emergencyContactPhone || ''}</span></li>
             <li class="list-group-item d-flex justify-content-between"><span class="text-secondary">Account created</span><span>${fmtDateTime(p.createdAt)}</span></li>
           </ul></div>
-        <div class="card mb-4"><div class="card-header">PT sessions per month</div>
+        <div class="card mb-4"><div class="card-header">Training sessions per month</div>
           <ul class="list-group list-group-flush small">${data.usage.length ? data.usage.map((u) => html`
             <li class="list-group-item d-flex justify-content-between"><span>${monthLabel(u.month)}</span><span class="fw-semibold">${u.sessionsUsed}</span></li>`)
     : html`<li class="list-group-item text-secondary">No sessions yet</li>`}</ul></div>
