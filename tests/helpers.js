@@ -19,6 +19,8 @@ const SEED = {
   taeyang: 'taeyang.seo@binaryfit.test', // active; queued renewal awaiting bank transfer
   ethan: 'ethan.brooks@binaryfit.test',  // frozen
 };
+// A well-formed card for the demo gateway, which checks the format only.
+const CARD = { number: '4242 4242 4242 4242', expiry: `12/${(new Date().getFullYear() + 2) % 100}`, cvc: '123' };
 // Gym-access plans (see scripts/generate-seed.js) and trainer rates
 const PLANS = { month: 1, quarter: 2, half: 3, year: 4 };
 const RATES = { 3: 60000, 6: 50000 };
@@ -63,5 +65,5 @@ async function memberWithPlan(admin, { planId = PLANS.quarter, firstName = 'Test
 afterAll(() => sequelize.close());
 
 module.exports = {
-  app, request, sequelize, SEED, PLANS, RATES, PASSWORD, loginAs, uniqueEmail, uniqueUsername, futureWeekday, isoDate, memberWithPlan,
+  app, request, sequelize, SEED, PLANS, RATES, PASSWORD, CARD, loginAs, uniqueEmail, uniqueUsername, futureWeekday, isoDate, memberWithPlan,
 };

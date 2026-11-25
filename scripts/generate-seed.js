@@ -23,10 +23,10 @@ const BOOKING_HORIZON_DAYS = 21;   // how far ahead members have booked
 // ---------------------------------------------------------------------
 // Memberships are gym access only; personal training is paid per session.
 const PLANS = [
-  { id: 1, name: '1 Month',  months: 1,  price: 70000,  weight: 35, description: 'Gym floor, cardio zone, classes area and lockers for one month' },
-  { id: 2, name: '3 Months', months: 3,  price: 189000, weight: 30, description: 'Three months of gym access: ₩63,000 a month' },
-  { id: 3, name: '6 Months', months: 6,  price: 342000, weight: 20, description: 'Six months of gym access: ₩57,000 a month' },
-  { id: 4, name: '1 Year',   months: 12, price: 600000, weight: 15, description: 'A full year of gym access: ₩50,000 a month' },
+  { id: 1, name: '1 Month',  months: 1,  price: 70000,  weight: 35, description: 'Try the gym with no long commitment.' },
+  { id: 2, name: '3 Months', months: 3,  price: 189000, weight: 30, description: 'Our most popular plan.' },
+  { id: 3, name: '6 Months', months: 6,  price: 342000, weight: 20, description: 'Stay on track through the season.' },
+  { id: 4, name: '1 Year',   months: 12, price: 600000, weight: 15, description: 'The lowest monthly price.' },
 ];
 
 const ADMINS = [

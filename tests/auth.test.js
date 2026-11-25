@@ -1,5 +1,5 @@
 const {
-  app, request, SEED, PLANS, PASSWORD, loginAs, uniqueEmail, uniqueUsername,
+  app, request, SEED, PLANS, PASSWORD, CARD, loginAs, uniqueEmail, uniqueUsername,
 } = require('./helpers');
 
 describe('authentication', () => {
@@ -33,6 +33,33 @@ describe('authentication', () => {
     expect(overview.body.current).toMatchObject({ planName: '3 Months', status: 'active', balanceKrw: 0 });
     const payments = await agent.get('/api/member/payments');
     expect(payments.body).toEqual([expect.objectContaining({ product: '3 Months', method: 'online', status: 'paid', amountKrw: 189000 })]);
+  });
+
+  test('sign-up: the demo gateway checks the card format', async () => {
+    const body = {
+      email: uniqueEmail('card'),
+      username: uniqueUsername('card'),
+      password: 'Strong123',
+      firstName: 'Card',
+      lastName: 'Member',
+      planId: PLANS.quarter,
+    };
+
+    const rejected = [
+      [{ ...CARD, number: '4242 4242 4242 424' }, 'card.number'],  // 15 digits
+      [{ ...CARD, expiry: '13/30' }, 'card.expiry'],               // no 13th month
+      [{ ...CARD, expiry: '01/20' }, 'card.expiry'],               // in the past
+      [{ ...CARD, cvc: '12' }, 'card.cvc'],
+    ];
+    for (const [card, field] of rejected) {
+      const res = await request(app).post('/api/auth/register').send({ ...body, card });
+      expect(res.status).toBe(400);
+      expect(res.body.error.fields).toHaveProperty([field]);
+    }
+
+    // Spaces and dashes are ignored: 16 digits is the whole rule.
+    const ok = await request(app).post('/api/auth/register').send({ ...body, card: { ...CARD, number: '4242-4242 4242 4242' } });
+    expect(ok.status).toBe(201);
   });
 
   test('sign-up validates fields and rejects duplicate emails', async () => {

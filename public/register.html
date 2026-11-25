@@ -25,7 +25,7 @@
         <!-- Step 1: personal details -->
         <section data-panel="1">
           <h1 class="h4 fw-bold mb-1">Create your member account</h1>
-          <p class="text-secondary mb-4">Every member joins with a gym membership, chosen in the next step.</p>
+          <p class="text-secondary mb-4">Every member joins with a membership, chosen next.</p>
           <form id="detailsForm" novalidate>
             <div class="row g-3">
               <div class="col-sm-6">
@@ -46,7 +46,7 @@
                   <span class="input-group-text">@</span>
                   <input class="form-control" id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" required>
                 </div>
-                <div class="username-status" id="usernameStatus" aria-live="polite"><span class="text-secondary">Your public name in the Social tab. Letters, numbers, periods and underscores.</span></div>
+                <div class="username-status" id="usernameStatus" aria-live="polite"><span class="text-secondary">Your public name in Social. Letters, numbers, . and _</span></div>
               </div>
               <div class="col-sm-6">
                 <label class="form-label" for="phone">Phone <span class="text-secondary small">(optional)</span></label>
@@ -69,7 +69,7 @@
         <!-- Step 2: choose a membership -->
         <section data-panel="2" hidden>
           <h1 class="h4 fw-bold mb-1">Choose your membership</h1>
-          <p class="text-secondary mb-4">Full gym access. Personal trainers are booked separately, whenever you like, and paid per session.</p>
+          <p class="text-secondary mb-4">Full gym access. Trainers are booked and paid separately.</p>
           <div class="row g-3" id="planChoices"></div>
           <div class="d-flex gap-2 mt-4">
             <button class="btn btn-light" type="button" data-back="1"><i class="bi bi-arrow-left me-1"></i>Back</button>
@@ -80,8 +80,9 @@
         <!-- Step 3: pay online -->
         <section data-panel="3" hidden>
           <h1 class="h4 fw-bold mb-1"><i class="bi bi-shield-lock me-2 text-brand"></i>Pay and join</h1>
-          <p class="text-secondary mb-3">Your account is created as soon as the payment goes through.</p>
+          <p class="text-secondary mb-3">Your account is created once the payment goes through.</p>
           <div id="summary" class="mb-3"></div>
+          <div id="cardBox" class="mb-3"></div>
           <div class="alert alert-danger d-none" id="payError"></div>
           <div class="d-flex flex-wrap gap-2 align-items-center">
             <button class="btn btn-light" type="button" data-back="2"><i class="bi bi-arrow-left me-1"></i>Back</button>

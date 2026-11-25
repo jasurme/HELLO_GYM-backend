@@ -13,10 +13,10 @@ const POST_FIELDS = `
   p.post_id, p.body, p.created_at,
   u.user_id AS author_id, u.username, CONCAT(u.first_name, ' ', u.last_name) AS name, r.role_name AS role,
   t.specialization,
-  (SELECT COUNT(*) FROM post_likes l    WHERE l.post_id = p.post_id) AS likes,
-  (SELECT COUNT(*) FROM post_comments c WHERE c.post_id = p.post_id) AS comments,
+  ps.likes, ps.comments,
   EXISTS (SELECT 1 FROM post_likes l WHERE l.post_id = p.post_id AND l.user_id = :me) AS liked_by_me`;
 const POST_JOINS = `
+  JOIN v_post_stats ps ON ps.post_id = p.post_id
   JOIN users u    ON u.user_id = p.author_id AND u.is_active
   JOIN roles r    ON r.role_id = u.role_id
   LEFT JOIN trainers t ON t.trainer_id = u.user_id`;

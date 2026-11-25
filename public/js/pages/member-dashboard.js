@@ -20,7 +20,7 @@ async function load() {
     <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
       <div>
         <h1 class="page-title h3 mb-1">${greeting}, ${user.firstName}</h1>
-        <p class="page-subtitle mb-0">Here is your membership and your next training sessions.</p>
+        <p class="page-subtitle mb-0">Your membership and next sessions.</p>
       </div>
       <a class="btn btn-primary" href="/member/book.html"><i class="bi bi-calendar-plus me-1"></i>Book a trainer</a>
     </div>

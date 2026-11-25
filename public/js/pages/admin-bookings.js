@@ -11,7 +11,7 @@ const state = { from: todayIso(), to: isoDate(new Date(Date.now() + 7 * 86400000
 
 render('#page', html`
   <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
-    <div><h1 class="page-title h3 mb-1">Bookings</h1><p class="page-subtitle mb-0">All personal-training sessions. The desk can book at short notice.</p></div>
+    <div><h1 class="page-title h3 mb-1">Bookings</h1><p class="page-subtitle mb-0">The desk can book at short notice.</p></div>
     <button class="btn btn-primary" id="bookBtn"><i class="bi bi-calendar-plus me-1"></i>Book for a member</button>
   </div>
   <div class="card mb-3"><div class="card-body"><form class="row g-2 align-items-end" id="filters">

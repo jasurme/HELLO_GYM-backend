@@ -146,10 +146,10 @@ INSERT INTO members (member_id, date_of_birth, emergency_contact_name, emergency
   (68, '1976-06-03', 'Jae-won Nguyen', '010-5398-3748', '2026-09-08');
 
 INSERT INTO membership_plans (plan_id, plan_name, description, duration_months, price_krw, is_active, created_at) VALUES
-  (1, '1 Month', 'Gym floor, cardio zone, classes area and lockers for one month', 1, 70000, 1, '2025-09-06 00:00:00'),
-  (2, '3 Months', 'Three months of gym access: ₩63,000 a month', 3, 189000, 1, '2025-09-06 00:00:00'),
-  (3, '6 Months', 'Six months of gym access: ₩57,000 a month', 6, 342000, 1, '2025-09-06 00:00:00'),
-  (4, '1 Year', 'A full year of gym access: ₩50,000 a month', 12, 600000, 1, '2025-09-06 00:00:00');
+  (1, '1 Month', 'Try the gym with no long commitment.', 1, 70000, 1, '2025-09-06 00:00:00'),
+  (2, '3 Months', 'Our most popular plan.', 3, 189000, 1, '2025-09-06 00:00:00'),
+  (3, '6 Months', 'Stay on track through the season.', 6, 342000, 1, '2025-09-06 00:00:00'),
+  (4, '1 Year', 'The lowest monthly price.', 12, 600000, 1, '2025-09-06 00:00:00');
 
 INSERT INTO trainer_availability (trainer_id, day_of_week, start_time, end_time) VALUES
   (3, 1, '07:00:00', '11:00:00'),

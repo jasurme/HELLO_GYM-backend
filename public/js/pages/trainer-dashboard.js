@@ -19,7 +19,7 @@ async function load() {
   render('#page', html`
     <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
       <div><h1 class="page-title h3 mb-1">Hello, ${user.firstName}</h1>
-        <p class="page-subtitle mb-0">${fmtDate(todayIso())} · here is your day.</p></div>
+        <p class="page-subtitle mb-0">${fmtDate(todayIso())}</p></div>
       <a class="btn btn-outline-primary" href="/trainer/availability.html"><i class="bi bi-clock me-1"></i>Edit my hours</a>
     </div>
     <div class="row g-3 mb-4">

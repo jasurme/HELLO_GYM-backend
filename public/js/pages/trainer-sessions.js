@@ -9,7 +9,7 @@ const state = { scope: 'upcoming', from: '', to: '' };
 
 render('#page', html`
   <h1 class="page-title h3 mb-1">Sessions</h1>
-  <p class="page-subtitle mb-4">Your personal-training sessions. Mark past sessions as completed or no-show.</p>
+  <p class="page-subtitle mb-4">Mark past sessions as completed or no-show.</p>
   <div class="card mb-3"><div class="card-body d-flex flex-wrap gap-3 align-items-end">
     <ul class="nav nav-pills me-auto" id="tabs">
       <li class="nav-item"><button class="nav-link active" data-scope="upcoming">Upcoming</button></li>

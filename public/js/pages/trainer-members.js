@@ -7,7 +7,7 @@ const members = await api('/trainer/members');
 
 render('#page', html`
   <h1 class="page-title h3 mb-1">My members</h1>
-  <p class="page-subtitle mb-4">Everyone you have trained or will train, with their next session first.</p>
+  <p class="page-subtitle mb-4">Everyone you train, next session first.</p>
   <div class="card">
     <div class="card-header d-flex gap-2 align-items-center">
       <input class="form-control form-control-sm w-auto" id="filter" placeholder="Search by name…">

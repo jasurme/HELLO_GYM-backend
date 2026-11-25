@@ -10,7 +10,7 @@ const state = { kind: '', status: '', from: isoDate(new Date(now.getFullYear(), 
 
 render('#page', html`
   <h1 class="page-title h3 mb-1">Payments</h1>
-  <p class="page-subtitle mb-4">Membership and training-session payments, at the desk or online. Allowed status changes: pending → paid / failed, and paid → refunded.</p>
+  <p class="page-subtitle mb-4">Desk and online payments. pending → paid / failed, paid → refunded.</p>
   <div class="card">
     <div class="card-header"><form class="row g-2 align-items-end" id="filters">
       <div class="col-sm-3"><label class="form-label small mb-1">Search</label><input class="form-control form-control-sm" name="search" placeholder="Member or reference"></div>

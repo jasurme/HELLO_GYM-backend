@@ -10,7 +10,7 @@ const state = { search: '', status: queryParam('status') || '' };
 
 render('#page', html`
   <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
-    <div><h1 class="page-title h3 mb-1">Members</h1><p class="page-subtitle mb-0">Everyone with a member account and their current membership.</p></div>
+    <div><h1 class="page-title h3 mb-1">Members</h1><p class="page-subtitle mb-0">Member accounts and their current membership.</p></div>
     <button class="btn btn-primary" id="newBtn"><i class="bi bi-person-plus me-1"></i>New member</button>
   </div>
   <div class="card">

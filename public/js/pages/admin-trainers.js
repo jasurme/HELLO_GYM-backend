@@ -7,7 +7,7 @@ await initPage({ role: 'admin' });
 
 render('#page', html`
   <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
-    <div><h1 class="page-title h3 mb-1">Trainers</h1><p class="page-subtitle mb-0">Sessions are paid per hour at each trainer’s rate. Figures come from the view v_trainer_booking_stats.</p></div>
+    <div><h1 class="page-title h3 mb-1">Trainers</h1><p class="page-subtitle mb-0">Paid per hour at each trainer’s rate · v_trainer_booking_stats</p></div>
     <button class="btn btn-primary" id="newBtn"><i class="bi bi-person-plus me-1"></i>New trainer</button>
   </div>
   <div class="card"><div class="table-responsive" id="table"></div></div>`);

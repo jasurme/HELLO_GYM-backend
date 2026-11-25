@@ -71,6 +71,7 @@ router.post('/register', loginLimiter, async (req, res) => {
   const person = await checkDetails(req.body);
   const { planId, simulateFailure } = v.validate(v.z.object({
     planId: v.id,
+    card: v.optionalCard,
     simulateFailure: v.z.boolean().optional(),
   }), req.body);
   const userId = await users.createMemberWithPlan({

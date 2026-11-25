@@ -34,4 +34,22 @@ const dateTime = z.string()
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:00)?$/, 'Use the format HH:mm').transform((v) => v.slice(0, 5));
 const money = z.coerce.number().int('Whole won only').positive('Must be more than 0').max(100000000);
 
-module.exports = { z, validate, id, email, password, name, optionalText, phone, date, optionalDate, dateTime, time, money };
+// Card details for the demo gateway (see subscriptions.chargeOnline). The
+// shape is checked so the checkout behaves like a real one; no money moves and
+// nothing here is written to the database — the payment row keeps only its own
+// PG reference number.
+const cardNumber = z.string()
+  .transform((v) => v.replace(/[\s-]/g, ''))
+  .refine((v) => /^\d{16}$/.test(v), 'A card number is 16 digits');
+const cardExpiry = z.string().trim()
+  .regex(/^(0[1-9]|1[0-2])\/\d{2}$/, 'Use the format MM/YY')
+  // Valid through the last day of the printed month.
+  .refine((v) => new Date(2000 + Number(v.slice(3)), Number(v.slice(0, 2)), 1) > new Date(), 'This card has expired');
+const cardCvc = z.string().trim().regex(/^\d{3}$/, 'The code is 3 digits');
+const card = z.object({ number: cardNumber, expiry: cardExpiry, cvc: cardCvc });
+// Optional, so the API stays usable without a card (tests, the front desk).
+const optionalCard = card.optional().nullable();
+
+module.exports = {
+  z, validate, id, email, password, name, optionalText, phone, date, optionalDate, dateTime, time, money, card, optionalCard,
+};

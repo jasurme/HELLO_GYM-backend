@@ -31,7 +31,7 @@ async function load() {
         <button class="btn btn-primary" data-action="sell" ${p.isActive ? '' : 'disabled'}><i class="bi bi-plus-lg me-1"></i>Sell plan</button>
       </div>
     </div>
-    ${p.isActive ? '' : html`<div class="alert alert-secondary">This account is deactivated: the member cannot log in or book.</div>`}
+    ${p.isActive ? '' : html`<div class="alert alert-secondary">Deactivated: cannot log in or book.</div>`}
 
     <div class="row g-4">
       <div class="col-xl-8">

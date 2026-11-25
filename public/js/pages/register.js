@@ -3,6 +3,7 @@ import {
   paymentComplete,
 } from '../app.js';
 import { wireUsernameCheck, suggestFromName } from '../username-check.js';
+import { cardFields, wireCard, readCard } from '../card-form.js';
 
 // Three steps, one request at the end: the account, the membership and its
 // payment are created together, so nobody joins without a paid plan.
@@ -105,13 +106,18 @@ $('#toPayment').addEventListener('click', () => {
 });
 
 // ---- Step 3: pay and create the account ---------------------------------
+render('#cardBox', cardFields());
+wireCard();
+
 async function pay(button) {
   const error = $('#payError');
   error.classList.add('d-none');
+  const card = readCard();
+  if (!card) return;
   const plan = state.plans.find((p) => p.planId === state.planId);
   await busy(button, async () => {
     try {
-      await api('/auth/register', { method: 'POST', body: { ...state.details, planId: state.planId } });
+      await api('/auth/register', { method: 'POST', body: { ...state.details, planId: state.planId, card } });
       paymentComplete({
         amount: plan.priceKrw,
         lines: [`Welcome to BinaryFit, ${state.details.firstName}!`, `Your ${plan.planName} membership is active.`],

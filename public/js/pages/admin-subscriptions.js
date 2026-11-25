@@ -8,7 +8,7 @@ const state = { status: queryParam('status') || '', search: '' };
 
 render('#page', html`
   <h1 class="page-title h3 mb-1">Subscriptions</h1>
-  <p class="page-subtitle mb-4">Status is derived from dates, payments and freezes by the view v_subscription_status. It is never stored.</p>
+  <p class="page-subtitle mb-4">Status is derived by v_subscription_status, never stored.</p>
   <div class="card">
     <div class="card-header d-flex flex-wrap gap-2 align-items-center">
       <div class="input-group input-group-sm" style="max-width:320px"><span class="input-group-text"><i class="bi bi-search"></i></span>

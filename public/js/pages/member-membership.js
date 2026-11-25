@@ -3,6 +3,7 @@ import {
   busy, modal, queryParam, paymentComplete, METHOD_LABELS, $,
 } from '../app.js';
 import { membershipCard } from '../components.js';
+import { cardFields, wireCard, readCard, resetCard } from '../card-form.js';
 
 await initPage({ role: 'member' });
 
@@ -12,7 +13,7 @@ let checkout = null;
 
 render('#page', html`
   <h1 class="page-title h3 mb-1">Membership &amp; payments</h1>
-  <p class="page-subtitle mb-4">Your gym membership, renewals, and everything you have paid, including training sessions.</p>
+  <p class="page-subtitle mb-4">Your membership, renewals and payments.</p>
   <div class="row g-4 mb-4">
     <div class="col-lg-5" id="current"></div>
     <div class="col-lg-7" id="due"></div>
@@ -28,7 +29,8 @@ render('#page', html`
     <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
       <div class="modal-header"><h5 class="modal-title"><i class="bi bi-shield-lock me-2 text-brand"></i>Online checkout</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body">
-        <div id="checkoutSummary"></div>
+        <div id="checkoutSummary" class="mb-3"></div>
+        ${cardFields()}
       </div>
       <div class="modal-footer">
         <button class="btn btn-light" data-bs-dismiss="modal">Back</button>
@@ -36,6 +38,8 @@ render('#page', html`
       </div>
     </div></div>
   </div>`);
+
+wireCard();
 
 const plural = (n) => (n === 1 ? '1 month' : `${n} months`);
 
@@ -52,18 +56,21 @@ function openCheckout(target) {
       ${sub.paidKrw > 0 ? html`<div class="d-flex justify-content-between small"><span>Already paid</span><span>−${krw(sub.paidKrw)}</span></div>` : ''}
       <hr><div class="d-flex justify-content-between fw-bold fs-5"><span>To pay</span><span>${krw(amount)}</span></div>`);
   $('#payBtn').innerHTML = `<i class="bi bi-lock-fill me-1"></i>Pay ${krw(amount)}`;
+  resetCard();
   modal('#checkoutModal').show();
 }
 
 async function pay(button) {
   const { plan, sub } = checkout;
+  const card = readCard();
+  if (!card) return;
   await busy(button, async () => {
     try {
       if (plan) {
         // Buying is one step: the membership exists only once it is paid.
-        await api('/member/subscriptions', { method: 'POST', body: { planId: plan.planId } });
+        await api('/member/subscriptions', { method: 'POST', body: { planId: plan.planId, card } });
       } else {
-        await api(`/member/subscriptions/${sub.subscriptionId}/checkout`, { method: 'POST', body: {} });
+        await api(`/member/subscriptions/${sub.subscriptionId}/checkout`, { method: 'POST', body: { card } });
       }
       modal('#checkoutModal').hide();
       paymentComplete({

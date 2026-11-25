@@ -6,6 +6,7 @@
 //   npm run db:reset -- --no-seed    schema only
 //   NODE_ENV=test npm run db:reset   the test database (gym_test)
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { connect, runSqlFile } = require('./lib/sql-runner');
 const { generateSeed } = require('./generate-seed');
@@ -28,7 +29,12 @@ async function resetDatabase({ seed = true, log = console.log } = {}) {
     if (!seed) return null;
 
     const result = generateSeed();
-    const seedFile = path.join(DB_DIR, '04_seed.sql');
+    // The tests rebuild gym_test on every run. The generated SQL differs each
+    // time (new bcrypt salt, dates relative to today), so writing the tracked
+    // snapshot here would leave a 5,000-line diff after every `npm test`.
+    const seedFile = env.isTest
+      ? path.join(os.tmpdir(), 'binaryfit-test-seed.sql')
+      : path.join(DB_DIR, '04_seed.sql');
     fs.writeFileSync(seedFile, result.sql);
     const count = await runSqlFile(conn, seedFile);
     log(`  04_seed.sql      ${count} statements`);

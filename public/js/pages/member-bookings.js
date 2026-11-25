@@ -10,7 +10,7 @@ let scope = 'upcoming';
 render('#page', html`
   <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
     <div><h1 class="page-title h3 mb-1">My sessions</h1>
-      <p class="page-subtitle mb-0">Your personal-training sessions, upcoming and past.</p></div>
+      <p class="page-subtitle mb-0">Upcoming and past.</p></div>
     <a class="btn btn-primary" href="/member/book.html"><i class="bi bi-calendar-plus me-1"></i>Book a session</a>
   </div>
   <ul class="nav nav-pills mb-3" id="tabs">

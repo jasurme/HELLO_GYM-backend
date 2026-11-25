@@ -2,6 +2,7 @@ import {
   api, initPage, html, render, showError, avatar, emptyState, fmtDate, fmtRange, isoDate, todayIso,
   busy, modal, queryParam, krw, paymentComplete, $, $$,
 } from '../app.js';
+import { cardFields, wireCard, readCard, resetCard } from '../card-form.js';
 
 await initPage({ role: 'member' });
 
@@ -24,7 +25,7 @@ const state = {
 
 render('#page', html`
   <h1 class="page-title h3 mb-1">Book a personal-training session</h1>
-  <p class="page-subtitle mb-4">Choose a trainer, a day and a length, then pick a free time. Each session is paid when you book it.</p>
+  <p class="page-subtitle mb-4">Pick a trainer, a day and a length, then a free time. Paid when you book.</p>
   <div class="row g-4">
     <div class="col-lg-4">
       <div class="card">
@@ -85,9 +86,10 @@ render('#page', html`
       <div class="modal-header"><h5 class="modal-title"><i class="bi bi-shield-lock me-2 text-brand"></i>Pay and book</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body">
         <div id="confirmSummary" class="mb-3"></div>
+        <div class="mb-3">${cardFields()}</div>
         <label class="form-label" for="memberNote">Note for the trainer <span class="text-secondary small">(optional)</span></label>
         <textarea class="form-control" id="memberNote" rows="2" maxlength="255" placeholder="e.g. focus on lower back"></textarea>
-        <div class="form-text">Cancel online up to 12 hours before and you get a full refund.</div>
+        <div class="form-text">Free cancellation up to 12 hours before.</div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-light" data-bs-dismiss="modal">Back</button>
@@ -97,6 +99,7 @@ render('#page', html`
   </div>`);
 
 $('#date').value = state.date;
+wireCard();
 
 function selectTrainer() {
   $$('.trainer-option').forEach((el) => el.classList.toggle('selected', Number(el.dataset.trainer) === state.trainerId));
@@ -187,10 +190,13 @@ $('#slots').addEventListener('click', (event) => {
     <div class="fs-5 fw-bold">${krw(state.price)}</div></div>`);
   $('#bookBtn').innerHTML = `<i class="bi bi-lock-fill me-1"></i>Pay ${krw(state.price)} and book`;
   $('#memberNote').value = '';
+  resetCard();
   modal('#confirmModal').show();
 });
 
 async function book(button) {
+  const card = readCard();
+  if (!card) return;
   await busy(button, async () => {
     try {
       const s = await api('/member/bookings', {
@@ -200,6 +206,7 @@ async function book(button) {
           startsAt: `${state.date} ${state.slot}`,
           duration: state.duration,
           memberNote: $('#memberNote').value.trim() || null,
+          card,
         },
       });
       modal('#confirmModal').hide();

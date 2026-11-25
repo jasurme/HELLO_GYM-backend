@@ -77,7 +77,7 @@ export function freezeDialog(sub, { onDone } = {}) {
     title: `Freeze ${sub.memberName}'s membership`,
     submitText: 'Freeze',
     body: html`
-      <p class="small text-secondary">The frozen days are added to the end date (now ${fmtDate(sub.endDate)}). Booked sessions inside the freeze must be cancelled first.</p>
+      <p class="small text-secondary">Frozen days are added to the end date (now ${fmtDate(sub.endDate)}). Cancel booked sessions inside the freeze first.</p>
       <div class="row g-3">
         <div class="col-sm-6">${field('First frozen day', html`<input type="date" class="form-control" name="freezeStart" min="${todayIso()}" value="${todayIso()}">`)}</div>
         <div class="col-sm-6">${field('Number of days', html`<input type="number" class="form-control" name="days" min="1" max="60" value="14">`)}</div>

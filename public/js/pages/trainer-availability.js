@@ -11,7 +11,7 @@ const timeOptions = (selected) => TIMES.map((t) => html`<option ${t === selected
 
 render('#page', html`
   <h1 class="page-title h3 mb-1">Weekly availability</h1>
-  <p class="page-subtitle mb-4">Members can book you only inside these hours. Windows on the same day cannot overlap.</p>
+  <p class="page-subtitle mb-4">Members can book only inside these hours. Same-day windows cannot overlap.</p>
   <div class="card mb-4"><div class="card-body">
     <form id="addForm" class="row g-3 align-items-end">
       <div class="col-sm-4 col-lg-3"><label class="form-label">Day</label>

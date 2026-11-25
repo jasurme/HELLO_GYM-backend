@@ -9,7 +9,7 @@ let plans = [];
 render('#page', html`
   <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
     <div><h1 class="page-title h3 mb-1">Membership plans</h1>
-      <p class="page-subtitle mb-0">Price changes apply to new sales only: sold subscriptions keep their agreed price.</p></div>
+      <p class="page-subtitle mb-0">Price changes apply to new sales only.</p></div>
     <button class="btn btn-primary" id="newBtn"><i class="bi bi-plus-lg me-1"></i>New plan</button>
   </div>
   <div class="card"><div class="table-responsive" id="table"></div></div>`);

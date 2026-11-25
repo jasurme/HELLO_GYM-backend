@@ -39,6 +39,7 @@ router.get('/subscriptions/:id', async (req, res) => {
 router.post('/subscriptions', async (req, res) => {
   const { planId, simulateFailure } = v.validate(v.z.object({
     planId: v.id,
+    card: v.optionalCard,
     simulateFailure: v.z.boolean().optional(),
   }), req.body);
   const sub = await subscriptions.purchaseOnline(me(req), planId, { simulateFailure });
@@ -48,7 +49,10 @@ router.post('/subscriptions', async (req, res) => {
 // Pay online for a membership the front desk left awaiting payment.
 router.post('/subscriptions/:id/checkout', async (req, res) => {
   const subscriptionId = v.validate(v.id, req.params.id);
-  const { simulateFailure } = v.validate(v.z.object({ simulateFailure: v.z.boolean().optional() }), req.body);
+  const { simulateFailure } = v.validate(v.z.object({
+    card: v.optionalCard,
+    simulateFailure: v.z.boolean().optional(),
+  }), req.body);
   const { declined } = await subscriptions.checkout(me(req), subscriptionId, { simulateFailure });
   if (declined) throw new HttpError(402, 'The payment was declined (simulated). No money was taken. Please try again.');
   res.json(await subscriptions.subscriptionDetail(subscriptionId));
@@ -83,12 +87,14 @@ const bookingSchema = v.z.object({
   startsAt: v.dateTime,
   duration: v.z.coerce.number().int().default(60),
   memberNote: v.optionalText(255),
+  card: v.optionalCard,
   simulateFailure: v.z.boolean().optional(),
 });
 
-// Book a paid training session; it is paid online in the same step.
+// Book a paid training session; it is paid online in the same step. The card
+// is format-checked by the schema above and then dropped: nothing is stored.
 router.post('/bookings', async (req, res) => {
-  const { simulateFailure, ...data } = v.validate(bookingSchema, req.body);
+  const { simulateFailure, card, ...data } = v.validate(bookingSchema, req.body);
   res.status(201).json(await bookings.createBooking({
     ...data,
     memberId: me(req),

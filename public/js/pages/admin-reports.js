@@ -23,7 +23,7 @@ const statusTotal = active.byStatus.reduce((s, r) => s + r.subscriptions, 0);
 render('#page', html`
   <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
     <div><h1 class="page-title h3 mb-1">Management reports</h1>
-      <p class="page-subtitle mb-0">Every figure is a SQL query over the database views, as of ${fmtDate(todayIso())}.</p></div>
+      <p class="page-subtitle mb-0">SQL over the database views · ${fmtDate(todayIso())}</p></div>
     <button class="btn btn-outline-secondary d-print-none" id="printBtn"><i class="bi bi-printer me-1"></i>Print</button>
   </div>
 
@@ -97,7 +97,7 @@ render('#page', html`
         <td><span class="badge ${e.windowLabel === 'within 7 days' ? 'bg-danger-subtle text-danger-emphasis' : 'bg-warning-subtle text-warning-emphasis'}">${e.windowLabel}</span></td>
         <td>${e.renewed === 'yes' ? html`<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>yes</span>` : html`<span class="text-secondary">no</span>`}</td></tr>`)}</tbody></table></div>`
     : emptyState('calendar-check', 'Nothing expires in the next 30 days.'))}
-  <p class="small text-secondary">Report 4 (monthly revenue trend) is the chart in section 2.</p>`);
+  <p class="small text-secondary">Report 4 (monthly revenue) is the chart above.</p>`);
 
 revenueChart($('#revenueChart'), revenue.trend);
 $('#printBtn').addEventListener('click', () => window.print());
